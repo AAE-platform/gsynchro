@@ -78,7 +78,12 @@ try {
     process.exit(0);
   }
 
-  run('npm', ['version', releaseType]);
+  run('npm', [
+    'version',
+    releaseType,
+    '--message',
+    '[published] version %s',
+  ]);
   const releasedPackage = JSON.parse(
     await readFile(path.join(root, 'package.json'), 'utf8'),
   );
