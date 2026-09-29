@@ -89,10 +89,21 @@ try {
   );
 
   try {
+    run('git', ['push', '--follow-tags']);
+  } catch (error) {
+    console.error(
+      '\nThe version commit and tag are local, but the Git push failed. ' +
+      'Fix the Git remote/access, then run `git push --follow-tags` followed by ' +
+      '`npm publish`; do not run the release script again.',
+    );
+    throw error;
+  }
+
+  try {
     run('npm', ['publish']);
   } catch (error) {
     console.error(
-      '\nThe version commit and tag were created, but publishing failed. ' +
+      '\nThe version commit and tag were pushed, but publishing failed. ' +
       'Fix npm access and run `npm publish` again; do not bump the version again.',
     );
     throw error;

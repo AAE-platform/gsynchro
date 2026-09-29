@@ -559,13 +559,13 @@ The published package includes only the compiled CLI, this README, the license, 
 npm pack --dry-run
 ```
 
-To publish a release, start with a clean Git working tree. The release script checks npm authentication and starts interactive `npm login` if needed, asks for confirmation, creates the version commit and tag, and publishes. The npm account must have publish access:
+To publish a release, start with a clean Git working tree and a configured Git push remote. The release script checks npm authentication and starts interactive `npm login` if needed, asks for confirmation, creates the version commit and tag, pushes the branch and tag, then publishes to npm. The npm account must have publish access:
 
 ```bash
 npm run release -- patch
 ```
 
-Use `minor` or `major` instead of `patch` when appropriate. If publishing fails after the version commit and tag are created, fix npm access and run `npm publish` again; do not bump the version a second time.
+Use `minor` or `major` instead of `patch` when appropriate. If Git push fails, fix Git access and run `git push --follow-tags`, then `npm publish`; if npm publishing fails after the push, fix npm access and run `npm publish`. In either case, do not run the release script again for that version.
 
 `prepublishOnly` runs the typecheck and build immediately before publishing. Enable npm two-factor authentication for publishing; consider npm trusted publishing with OpenID Connect when releases are automated.
 
