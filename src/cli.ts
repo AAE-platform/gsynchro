@@ -1313,8 +1313,22 @@ async function scanSide(
   const result = new Map<string, FileSnapshot>();
 
   for (const file of files) {
+    let hash: string;
+
+    try {
+      hash = await hashFile(file.absolutePath);
+    } catch (error) {
+      const detail = error instanceof Error
+        ? error.message
+        : String(error);
+      throw new Error(
+        `Failed to read ${sideLabel(side)} file ${file.relativePath}: ${detail}`,
+        { cause: error },
+      );
+    }
+
     result.set(file.relativePath, {
-      hash: await hashFile(file.absolutePath),
+      hash,
       size: file.size,
       mtimeMs: file.mtimeMs,
     });
