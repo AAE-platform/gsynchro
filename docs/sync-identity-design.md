@@ -27,7 +27,7 @@ The experiment leaves filenames unchanged and adds this footprint only to Markdo
 
 1. When a new Markdown file appears in the repository, gsynchro adds the footprint during the scan before copying it to Drive.
 2. When a new Markdown file appears only on Drive, gsynchro adds the footprint on Drive, then copies that updated file to the repository. A same-path file already registered in the repository supplies the ID to avoid a collision.
-3. Pair repository and destination copies by ID, then track each side's path and content hash. A matching ID at a new path indicates a move or rename. Full ID-based move planning is the next experiment; the current release still plans operations by path.
+3. Pair repository and destination copies by ID, then track each side's path and content hash. `.gsynchro/gsynchro.status` stores the identity at each path and the identity inside each side's snapshot, so a later scan can compare an old path with a newly appearing path. A matching unique ID at a new path indicates a move or rename. Full ID-based move planning is the next experiment; the current release still plans operations by path.
 4. If a previously tracked file loses its footprint, the current experiment assigns a new ID; restoring an old ID from saved state remains a follow-up improvement.
 5. If the same ID occurs in two files on one side, stop and report the duplication. A copied document intended to become a separate file needs a fresh ID.
 6. Interpret absence as deletion only after a complete, successful scan of the relevant side. An `EIO` or other unreadable file is an error, not evidence of absence.

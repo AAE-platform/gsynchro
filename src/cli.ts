@@ -37,6 +37,8 @@ interface FileSnapshot {
 }
 
 interface StatusEntry {
+  /** Identity shared by the two copies when they agree. */
+  identity?: string;
   commonHash: string | null;
   repo: FileSnapshot | null;
   drive: FileSnapshot | null;
@@ -1811,7 +1813,14 @@ function buildStatusFromState(
         ? repo.hash
         : null;
 
+    const identity = repo?.identity && drive?.identity
+      ? repo.identity === drive.identity
+        ? repo.identity
+        : undefined
+      : repo?.identity ?? drive?.identity;
+
     files[relativePath] = {
+      ...(identity ? { identity } : {}),
       commonHash,
       repo,
       drive,

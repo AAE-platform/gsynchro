@@ -482,6 +482,8 @@ The project directory always wins a conflict, including a conflict between a pro
 
 Managed Markdown files receive a hidden `gsynchro:v1` GUID comment between YAML frontmatter and document content. Files first seen in the repository are marked before they are copied to Drive; files first seen on Drive are marked there and then copied to the repository. Preserve this comment when editing or moving a Markdown file. The identifier is currently used for diagnostics and collision detection while move planning remains path based during the experiment.
 
+The saved `.gsynchro/gsynchro.status` also records the identity for each tracked path and inside each repository or destination snapshot. This preserves the evidence needed to recognize a later unlink plus appearance at another path as a move once ID based move planning is enabled.
+
 ### Deletions and trash
 
 When a deletion is propagated, `gsynchro` attempts to move the affected file into `.trash/` on the side where the file is being removed. The two trash directories are independent and are never synchronized. Trash is a recovery aid; synchronization decisions are based on the saved status file, not on trash contents.
