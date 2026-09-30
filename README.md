@@ -492,6 +492,8 @@ The repository `.gsynchro/gsynchro.yml` is authoritative. gsynchro writes a gene
 
 When a deletion is propagated, `gsynchro` attempts to move the affected file into `.trash/` on the side where the file is being removed. The two trash directories are independent and are never synchronized. Trash is a recovery aid; synchronization decisions are based on the saved status file, not on trash contents.
 
+Keep `.trash/` even when status history is enabled. It can recover a file that gsynchro removed after a mistaken interpretation or a reset status. It does not protect files deleted manually before gsynchro detects the change, and it does not replace the status files. A later cleanup policy can remove old trash entries.
+
 ## Safety rules
 
 The following rules are always applied, regardless of the configured `items` patterns:
@@ -507,7 +509,9 @@ The following rules are always applied, regardless of the configured `items` pat
 
 ## State and Git ignore
 
-`.gsynchro/gsynchro.status` is created automatically after a successful reconciliation. It stores the hashes and presence state needed to distinguish a deletion from a file that has never been synchronized. Do not edit or commit it.
+`.gsynchro/gsynchro.status` is created automatically after reconciliation. It stores hashes, presence state, Markdown identities, the local machine ID, and a bounded history of synchronization events. The separate `destination/.gsynchro/gsynchro.status` stores the Drive-side view and history from the instances that have written it. Do not edit or commit either status file.
+
+`.gsynchro/machine-id.json` is created once per machine and is ignored by Git. It identifies the writer of status history entries; it is not a lock and does not coordinate multiple running instances.
 
 Add the generated state file to the project's `.gitignore`:
 
@@ -517,6 +521,8 @@ Add the generated state file to the project's `.gitignore`:
 ```
 
 Keep the status file between runs. Removing it resets synchronization history; the next run is treated as an initial synchronization and may replace different destination content with the project version when paths overlap.
+
+An old status with `version: 1` remains readable even when it does not yet contain identity, machine, or history fields. After a successful run it is rewritten with the new fields. If the status is malformed or has an unsupported version, gsynchro stops without treating missing files as deletions. Before deliberately resetting a status, keep a backup for later analysis.
 
 ## Troubleshooting
 
