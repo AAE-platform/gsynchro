@@ -38,3 +38,9 @@ The experiment leaves filenames unchanged and adds this footprint only to Markdo
 A Markdown comment may be lost when an agent converts the document to DOCX. Consider detecting a disappearing `.md` alongside a new `.docx` and suspending the deletion with a clear diagnostic. This needs a policy for whether DOCX should be synchronized, how conversions are linked to the original Markdown identity, and what to do when both formats remain.
 
 Before implementation, decide how to migrate existing Markdown files without creating surprising mass edits, how to handle files copied with the same footprint, and how to recover if state is reset or multiple gsynchro processes scan the same pair concurrently. The footprint helps identify moves; it does not fix filesystem read errors or make an unreadable Drive file safe to delete.
+
+## Configuration and side-local state
+
+The repository remains authoritative for configuration. At startup and during reconciliation, gsynchro writes a generated copy to `destination/.gsynchro/gsynchro.yml`. The copy contains an explicit comment explaining that it is generated from the repository, which paths and extensions are synchronized, and that other Drive files remain Drive-only. It is metadata for people and agents working in Drive; edits are overwritten by the repository configuration.
+
+The generated configuration mirror and side-local status files are excluded from normal file synchronization. A delete or edit event for the Drive mirror causes the next reconciliation to restore it. The repository status and a future Drive status may contain different local observations; they are evidence used together, not two competing configuration sources.

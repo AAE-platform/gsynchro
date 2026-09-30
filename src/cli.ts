@@ -79,6 +79,8 @@ type SyncOperation =
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const SYNCHRONIZATION_NOTICE_FILENAME = 'GSYNCHRO.md';
 const SYNCHRONIZATION_NOTICE_MARKER = '<!-- gsynchro synchronization notice: v1 -->';
+const CONFIG_MIRROR_FILENAME = 'gsynchro.yml';
+const CONFIG_MIRROR_MARKER = '# gsynchro authoritative repository configuration mirror: v1';
 const FILE_IDENTITY_PATTERN = /<!-- gsynchro:v1 id=([0-9a-f-]{36}) registered=([^\s]+) -->/i;
 const DEBUG = process.argv.slice(2).includes('--debug');
 const SETUP = process.argv.slice(2).includes('--setup');
@@ -815,6 +817,10 @@ function renderConfigYaml(cfg: {
     .join('\n');
 
   return (
+    `${CONFIG_MIRROR_MARKER}\n` +
+    '# This file is generated from .gsynchro/gsynchro.yml in the repository.\n' +
+    '# The repository configuration is authoritative; edits here are replaced.\n' +
+    '# Files matching these rules are synchronized; other Drive files remain only in Drive.\n' +
     '# Existing local directory or mount point for the other side of the sync.\n' +
     `destination: ${yamlString(cfg.destination)}\n` +
     '\n' +
@@ -830,6 +836,39 @@ function renderConfigYaml(cfg: {
     'items:\n' +
     `${itemsYaml}\n`
   );
+}
+
+async function writeConfigurationMirror(
+  destination: string,
+  cfg: Config,
+): Promise<boolean> {
+  const mirrorDirectory = path.join(destination, '.gsynchro');
+  const mirrorPath = path.join(mirrorDirectory, CONFIG_MIRROR_FILENAME);
+  const content = renderConfigYaml({
+    destination: cfg.destination,
+    items: cfg.items,
+    extensions: cfg.extensions,
+    debounce: cfg.debounce ?? 3,
+  });
+
+  let existing: string | undefined;
+  try {
+    existing = await readFile(mirrorPath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  if (existing === content) {
+    return false;
+  }
+
+  await mkdir(mirrorDirectory, { recursive: true });
+  const temporary = `${mirrorPath}.tmp-${process.pid}`;
+  await writeFile(temporary, content, 'utf8');
+  await rename(temporary, mirrorPath);
+  return true;
 }
 
 function renderSynchronizationNotice(cfg: Config): string {
@@ -1108,6 +1147,8 @@ async function runSetup(): Promise<boolean> {
         `[gsynchro] wrote ${path.join(destination, SYNCHRONIZATION_NOTICE_FILENAME)}`,
       );
     }
+
+    await writeConfigurationMirror(destination, setupConfig);
 
     await mkdir(CONFIG_DIR, { recursive: true });
     await writeFile(
@@ -1850,6 +1891,9 @@ async function reconcile(): Promise<void> {
   eventQueue = [];
 
   try {
+    /* The repository configuration is authoritative for the Drive mirror. */
+    await writeConfigurationMirror(DRIVE_ROOT, config);
+
     console.log('');
     console.log(
       `${label('🔄', 'Syncing', 'cyan')} ${paint(new Date().toLocaleTimeString(), 'dim')}`,
@@ -1969,11 +2013,12 @@ function queueEvent(
    */
   const segments = relativePath.split('/');
 
-  if (
-    segments.some((segment) =>
-      EXCLUDED_DIRECTORIES.has(segment),
-    )
-  ) {
+  const isConfigMirror = side === 'drive' &&
+    relativePath.toLowerCase() === '.gsynchro/gsynchro.yml';
+
+  if (!isConfigMirror && segments.some((segment) =>
+    EXCLUDED_DIRECTORIES.has(segment),
+  )) {
     debug(`QUEUE ${side.toUpperCase()} ignored: ${type} ${relativePath}`);
     return;
   }
@@ -2050,10 +2095,14 @@ function createWatcher(
         const hasExcludedSegment = normalizedPath.split('/').some(
           (segment) => EXCLUDED_DIRECTORIES.has(segment),
         );
-        const ignored = hasExcludedSegment ||
-          (info?.isDirectory() === true &&
+        const isConfigMirror = side === 'drive' &&
+          normalizedPath.toLowerCase() === '.gsynchro/gsynchro.yml';
+        const isConfigDirectory = side === 'drive' &&
+          normalizedPath.toLowerCase() === '.gsynchro';
+        const ignored = (!isConfigMirror && !isConfigDirectory && hasExcludedSegment) ||
+          (!isConfigMirror && !isConfigDirectory && info?.isDirectory() === true &&
             !directoryMayContainConfiguredItem(normalizedPath, config.items)) ||
-          (info?.isFile() === true &&
+          (!isConfigMirror && info?.isFile() === true &&
             !isAllowedRelativePath(relativePath, extensionSet));
         if (ignored) {
           debug(`FILTER ${side.toUpperCase()} ignored: ${relativePath}`);
@@ -2158,6 +2207,12 @@ async function main(): Promise<void> {
   if (await writeSynchronizationNotice(DRIVE_ROOT, config)) {
     console.log(
       `[gsynchro] updated ${path.join(DRIVE_ROOT, SYNCHRONIZATION_NOTICE_FILENAME)}`,
+    );
+  }
+
+  if (await writeConfigurationMirror(DRIVE_ROOT, config)) {
+    console.log(
+      `[gsynchro] updated ${path.join(DRIVE_ROOT, '.gsynchro', CONFIG_MIRROR_FILENAME)}`,
     );
   }
 

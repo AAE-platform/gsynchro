@@ -484,6 +484,8 @@ Managed Markdown files receive a hidden `gsynchro:v1` GUID comment between YAML 
 
 The saved `.gsynchro/gsynchro.status` also records the identity for each tracked path and inside each repository or destination snapshot. This preserves the evidence needed to recognize a later unlink plus appearance at another path as a move once ID based move planning is enabled.
 
+The repository `.gsynchro/gsynchro.yml` is authoritative. gsynchro writes a generated copy to `destination/.gsynchro/gsynchro.yml` so people and agents working in Drive can see the active scope. The mirror explains that the repository wins and is rewritten when it is missing or changed; it is excluded from normal synchronization. Files outside the listed paths or extensions remain only in Drive.
+
 ### Deletions and trash
 
 When a deletion is propagated, `gsynchro` attempts to move the affected file into `.trash/` on the side where the file is being removed. The two trash directories are independent and are never synchronized. Trash is a recovery aid; synchronization decisions are based on the saved status file, not on trash contents.
