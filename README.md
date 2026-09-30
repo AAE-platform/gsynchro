@@ -484,6 +484,8 @@ Managed Markdown files receive a hidden `gsynchro:v1` GUID comment between YAML 
 
 The saved `.gsynchro/gsynchro.status` also records the identity for each tracked path and inside each repository or destination snapshot. This preserves the evidence needed to recognize a later unlink plus appearance at another path as a move once ID based move planning is enabled.
 
+Each machine also has a local `.gsynchro/machine-id.json`, ignored by Git. Status files record the machine ID, synchronization ID, timestamp, triggering events, operations, and result. A side-local status is written to `destination/.gsynchro/gsynchro.status` as diagnostic evidence from the Drive side. These files help reconstruct what happened across machines; they do not coordinate or block simultaneous processes.
+
 The repository `.gsynchro/gsynchro.yml` is authoritative. gsynchro writes a generated copy to `destination/.gsynchro/gsynchro.yml` so people and agents working in Drive can see the active scope. The mirror explains that the repository wins and is rewritten when it is missing or changed; it is excluded from normal synchronization. Files outside the listed paths or extensions remain only in Drive.
 
 ### Deletions and trash

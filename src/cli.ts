@@ -46,7 +46,20 @@ interface StatusEntry {
 
 interface StatusFile {
   version: 1;
+  machineId?: string;
+  updatedAt?: string;
+  history?: StatusHistoryEntry[];
   files: Record<string, StatusEntry>;
+}
+
+interface StatusHistoryEntry {
+  syncId: string;
+  machineId: string;
+  at: string;
+  result: 'started' | 'up-to-date' | 'completed' | 'failed';
+  triggerEvents?: Array<Pick<FsEvent, 'side' | 'type' | 'path'>>;
+  operations?: SyncOperation[];
+  error?: string;
 }
 
 interface FsEvent {
@@ -172,12 +185,14 @@ const REPO_ROOT = process.cwd();
 const CONFIG_DIR = path.join(REPO_ROOT, '.gsynchro');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'gsynchro.yml');
 const STATUS_PATH = path.join(CONFIG_DIR, 'gsynchro.status');
+const MACHINE_ID_PATH = path.join(CONFIG_DIR, 'machine-id.json');
 
 const REPO_TRASH = path.join(REPO_ROOT, '.trash');
 
 let config: Config;
 let DRIVE_ROOT = '';
 let DRIVE_TRASH = '';
+let MACHINE_ID = '';
 
 let repoWatcher: FSWatcher | undefined;
 let driveWatcher: FSWatcher | undefined;
@@ -1169,9 +1184,33 @@ async function runSetup(): Promise<boolean> {
 /* Persistent status                                                          */
 /* -------------------------------------------------------------------------- */
 
-async function loadStatus(): Promise<StatusFile> {
+async function ensureMachineId(): Promise<string> {
   try {
-    const raw = await readFile(STATUS_PATH, 'utf8');
+    const parsed = JSON.parse(await readFile(MACHINE_ID_PATH, 'utf8')) as {
+      machine_id?: unknown;
+    };
+    if (typeof parsed.machine_id === 'string' && parsed.machine_id.length > 0) {
+      return parsed.machine_id;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  const machineId = randomUUID();
+  await mkdir(CONFIG_DIR, { recursive: true });
+  await writeFile(
+    MACHINE_ID_PATH,
+    `${JSON.stringify({ machine_id: machineId, created_at: new Date().toISOString() }, null, 2)}\n`,
+    'utf8',
+  );
+  return machineId;
+}
+
+async function loadStatusFile(statusPath: string): Promise<StatusFile> {
+  try {
+    const raw = await readFile(statusPath, 'utf8');
     const parsed = JSON.parse(raw) as StatusFile;
 
     if (
@@ -1199,11 +1238,23 @@ async function loadStatus(): Promise<StatusFile> {
   }
 }
 
+async function loadStatus(): Promise<StatusFile> {
+  return loadStatusFile(STATUS_PATH);
+}
+
 async function saveStatus(
   statusFile: StatusFile,
 ): Promise<void> {
+  await saveStatusFile(STATUS_PATH, statusFile);
+}
+
+async function saveStatusFile(
+  statusPath: string,
+  statusFile: StatusFile,
+): Promise<void> {
   await mkdir(CONFIG_DIR, { recursive: true });
-  const tmpPath = `${STATUS_PATH}.tmp`;
+  await mkdir(path.dirname(statusPath), { recursive: true });
+  const tmpPath = `${statusPath}.tmp-${process.pid}`;
 
   await writeFile(
     tmpPath,
@@ -1211,7 +1262,32 @@ async function saveStatus(
     'utf8',
   );
 
-  await rename(tmpPath, STATUS_PATH);
+  await rename(tmpPath, statusPath);
+}
+
+function withStatusHistory(
+  status: StatusFile,
+  entry: StatusHistoryEntry,
+): StatusFile {
+  return {
+    ...status,
+    machineId: MACHINE_ID,
+    updatedAt: entry.at,
+    history: [...(status.history ?? []), entry].slice(-50),
+  };
+}
+
+async function saveStatusPair(
+  localStatus: StatusFile,
+  driveStatus: StatusFile,
+): Promise<void> {
+  await saveStatus(localStatus);
+  if (DRIVE_ROOT) {
+    await saveStatusFile(
+      path.join(DRIVE_ROOT, '.gsynchro', 'gsynchro.status'),
+      driveStatus,
+    );
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1874,6 +1950,25 @@ function buildStatusFromState(
   };
 }
 
+function buildSideStatus(
+  state: CurrentState,
+  side: Side,
+): StatusFile {
+  const snapshots = side === 'repo' ? state.repo : state.drive;
+  const files: Record<string, StatusEntry> = {};
+
+  for (const [relativePath, snapshot] of snapshots) {
+    files[relativePath] = {
+      ...(snapshot.identity ? { identity: snapshot.identity } : {}),
+      commonHash: snapshot.hash,
+      repo: side === 'repo' ? snapshot : null,
+      drive: side === 'drive' ? snapshot : null,
+    };
+  }
+
+  return { version: 1, files };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Main reconciliation                                                        */
 /* -------------------------------------------------------------------------- */
@@ -1889,6 +1984,14 @@ async function reconcile(): Promise<void> {
 
   const events = eventQueue;
   eventQueue = [];
+  const syncId = randomUUID();
+  const startedAt = new Date().toISOString();
+  const historyContext = {
+    syncId,
+    machineId: MACHINE_ID,
+    at: startedAt,
+    triggerEvents: events.map(({ side, type, path }) => ({ side, type, path })),
+  };
 
   try {
     /* The repository configuration is authoritative for the Drive mirror. */
@@ -1910,6 +2013,8 @@ async function reconcile(): Promise<void> {
 
     const previousStatus =
       await loadStatus();
+    const driveStatusPath = path.join(DRIVE_ROOT, '.gsynchro', 'gsynchro.status');
+    const previousDriveStatus = await loadStatusFile(driveStatusPath);
 
     /*
      * If this scan fails, no filesystem operation and no status write occur.
@@ -1932,9 +2037,18 @@ async function reconcile(): Promise<void> {
       /*
        * Even without actions, refreshing the status is useful on first run.
        */
-      await saveStatus(
-        buildStatusFromState(before),
+      const localStatus = withStatusHistory(buildStatusFromState(before), {
+        ...historyContext,
+        result: 'up-to-date',
+      });
+      const driveStatus = withStatusHistory(
+        buildSideStatus(before, 'drive'),
+        { ...historyContext, result: 'up-to-date' },
       );
+      await saveStatusPair(localStatus, {
+        ...driveStatus,
+        history: [...(previousDriveStatus.history ?? []), ...(driveStatus.history ?? [])].slice(-50),
+      });
 
       console.log(
         `${label('✅', 'Up to date', 'green')} repository and destination already match`,
@@ -1970,8 +2084,23 @@ async function reconcile(): Promise<void> {
      * and both roots could be scanned again.
      */
     await saveStatus(
-      buildStatusFromState(after),
+      withStatusHistory(buildStatusFromState(after), {
+        ...historyContext,
+        at: new Date().toISOString(),
+        result: 'completed',
+        operations: plan,
+      }),
     );
+    const driveStatus = withStatusHistory(buildSideStatus(after, 'drive'), {
+      ...historyContext,
+      at: new Date().toISOString(),
+      result: 'completed',
+      operations: plan,
+    });
+    await saveStatusFile(driveStatusPath, {
+      ...driveStatus,
+      history: [...(previousDriveStatus.history ?? []), ...(driveStatus.history ?? [])].slice(-50),
+    });
 
     console.log(
       `${label('✅', 'Sync complete', 'green')} ${plan.length} operation${
@@ -1979,11 +2108,32 @@ async function reconcile(): Promise<void> {
       } applied`,
     );
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    try {
+      const localStatus = await loadStatus();
+      await saveStatus(withStatusHistory(localStatus, {
+        ...historyContext,
+        at: new Date().toISOString(),
+        result: 'failed',
+        error: detail,
+      }));
+      if (DRIVE_ROOT) {
+        const driveStatusPath = path.join(DRIVE_ROOT, '.gsynchro', 'gsynchro.status');
+        const driveStatus = await loadStatusFile(driveStatusPath);
+        const failure = withStatusHistory(driveStatus, {
+          ...historyContext,
+          at: new Date().toISOString(),
+          result: 'failed',
+          error: detail,
+        });
+        await saveStatusFile(driveStatusPath, failure);
+      }
+    } catch {
+      /* Preserve the original synchronization error. */
+    }
     console.error(
       `${label('❌', 'Sync failed', 'red')}:`,
-      error instanceof Error
-        ? error.message
-        : error,
+      detail,
     );
   } finally {
     reconcileRunning = false;
@@ -2192,6 +2342,7 @@ async function main(): Promise<void> {
   }
 
   config = await loadConfig();
+  MACHINE_ID = await ensureMachineId();
 
   DRIVE_ROOT = path.resolve(
     config.destination,
