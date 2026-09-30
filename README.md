@@ -513,11 +513,12 @@ The following rules are always applied, regardless of the configured `items` pat
 
 `.gsynchro/machine-id.json` is created once per machine and is ignored by Git. It identifies the writer of status history entries; it is not a lock and does not coordinate multiple running instances.
 
-Add the generated state file to the project's `.gitignore`:
+When it starts, gsynchro creates `.gsynchro/.gitignore` with rules for its machine ID, status file, and temporary status files if the file does not exist. If it already exists, gsynchro leaves it unchanged and warns when any of those rules are missing.
 
 ```gitignore
-.gsynchro/gsynchro.status
-.gsynchro/gsynchro.status.tmp
+machine-id.json
+gsynchro.status
+gsynchro.status.tmp-*
 ```
 
 Keep the status file between runs. Removing it resets synchronization history; the next run is treated as an initial synchronization and may replace different destination content with the project version when paths overlap.

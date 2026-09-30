@@ -186,6 +186,12 @@ const CONFIG_DIR = path.join(REPO_ROOT, '.gsynchro');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'gsynchro.yml');
 const STATUS_PATH = path.join(CONFIG_DIR, 'gsynchro.status');
 const MACHINE_ID_PATH = path.join(CONFIG_DIR, 'machine-id.json');
+const CONFIG_GITIGNORE_PATH = path.join(CONFIG_DIR, '.gitignore');
+const CONFIG_GITIGNORE_ENTRIES = [
+  'machine-id.json',
+  'gsynchro.status',
+  'gsynchro.status.tmp-*',
+];
 
 const REPO_TRASH = path.join(REPO_ROOT, '.trash');
 
@@ -246,13 +252,13 @@ function sideLabel(side: Side): string {
     : name;
 }
 
-function printBanner(): void {
+function printBanner(version: string): void {
   if (STYLED_OUTPUT) {
-    console.log(`\n${paint('🔁 gsynchro', 'bold', 'cyan')} ${paint('bidirectional file sync', 'dim')}`);
+    console.log(`\n${paint('🔁 gsynchro', 'bold', 'cyan')} ${paint(`v${version}`, 'bold', 'yellow')} ${paint('bidirectional file sync', 'dim')}`);
     return;
   }
 
-  console.log('[gsynchro]');
+  console.log(`[gsynchro v${version}] bidirectional file sync`);
 }
 
 function debug(message: string, details?: unknown): void {
@@ -1185,6 +1191,8 @@ async function runSetup(): Promise<boolean> {
 /* -------------------------------------------------------------------------- */
 
 async function ensureMachineId(): Promise<string> {
+  await ensureConfigGitIgnore();
+
   try {
     const parsed = JSON.parse(await readFile(MACHINE_ID_PATH, 'utf8')) as {
       machine_id?: unknown;
@@ -1200,12 +1208,40 @@ async function ensureMachineId(): Promise<string> {
 
   const machineId = randomUUID();
   await mkdir(CONFIG_DIR, { recursive: true });
+  console.log(`[gsynchro] creating ${MACHINE_ID_PATH}`);
   await writeFile(
     MACHINE_ID_PATH,
     `${JSON.stringify({ machine_id: machineId, created_at: new Date().toISOString() }, null, 2)}\n`,
     'utf8',
   );
   return machineId;
+}
+
+async function ensureConfigGitIgnore(): Promise<void> {
+  await mkdir(CONFIG_DIR, { recursive: true });
+
+  let contents: string;
+  try {
+    contents = await readFile(CONFIG_GITIGNORE_PATH, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+    console.log(`[gsynchro] creating ${CONFIG_GITIGNORE_PATH}`);
+    await writeFile(CONFIG_GITIGNORE_PATH, `${CONFIG_GITIGNORE_ENTRIES.join('\n')}\n`, 'utf8');
+    return;
+  }
+
+  const existingEntries = new Set(contents.split(/\r?\n/).map((line) => line.trim()));
+  const missingEntries = CONFIG_GITIGNORE_ENTRIES.filter(
+    (entry) => !existingEntries.has(entry),
+  );
+
+  if (missingEntries.length > 0) {
+    console.warn(
+      `[gsynchro] warning: ${CONFIG_GITIGNORE_PATH} exists but is missing ignore entr${missingEntries.length === 1 ? 'y' : 'ies'}: ${missingEntries.join(', ')}`,
+    );
+  }
 }
 
 async function loadStatusFile(statusPath: string): Promise<StatusFile> {
@@ -1256,6 +1292,7 @@ async function saveStatusFile(
   await mkdir(path.dirname(statusPath), { recursive: true });
   const tmpPath = `${statusPath}.tmp-${process.pid}`;
 
+  console.log(`[gsynchro] writing status ${statusPath}`);
   await writeFile(
     tmpPath,
     `${JSON.stringify(statusFile, null, 2)}\n`,
@@ -2333,6 +2370,11 @@ async function shutdown(
 /* -------------------------------------------------------------------------- */
 
 async function main(): Promise<void> {
+  const packageMetadata = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+  ) as { version: string };
+  printBanner(packageMetadata.version);
+
   if (SETUP || !(await pathExists(CONFIG_PATH))) {
     const shouldContinue = await runSetup();
 
@@ -2367,7 +2409,6 @@ async function main(): Promise<void> {
     );
   }
 
-  printBanner();
   console.log(`  ${paint('Repository', 'bold')}:  ${REPO_ROOT}`);
   console.log(`  ${paint('Destination', 'bold')}: ${DRIVE_ROOT}`);
   console.log(`  ${paint('Debounce', 'bold')}:    ${config.debounce}s`);
