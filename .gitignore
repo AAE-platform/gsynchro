@@ -2,3 +2,4 @@ node_modules/
 dist/
 .gsynchro/gsynchro.status
 .gsynchro/gsynchro.status.tmp
+.gsynchro/machine-id.json
