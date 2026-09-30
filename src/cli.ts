@@ -4,7 +4,7 @@ import chokidar, { type FSWatcher } from 'chokidar';
 import fg from 'fast-glob';
 import YAML from 'yaml';
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import {
   access,
@@ -33,6 +33,7 @@ interface FileSnapshot {
   hash: string;
   size: number;
   mtimeMs: number;
+  identity?: string;
 }
 
 interface StatusEntry {
@@ -76,6 +77,7 @@ type SyncOperation =
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const SYNCHRONIZATION_NOTICE_FILENAME = 'GSYNCHRO.md';
 const SYNCHRONIZATION_NOTICE_MARKER = '<!-- gsynchro synchronization notice: v1 -->';
+const FILE_IDENTITY_PATTERN = /<!-- gsynchro:v1 id=([0-9a-f-]{36}) registered=([^\s]+) -->/i;
 const DEBUG = process.argv.slice(2).includes('--debug');
 const SETUP = process.argv.slice(2).includes('--setup');
 const STYLED_OUTPUT =
@@ -1192,6 +1194,64 @@ async function hashFile(
   });
 }
 
+function isMarkdownPath(relativePath: string): boolean {
+  return path.extname(relativePath).toLowerCase() === '.md';
+}
+
+function identityFromContent(content: string): string | undefined {
+  return content.match(FILE_IDENTITY_PATTERN)?.[1].toLowerCase();
+}
+
+function addMarkdownIdentity(
+  content: string,
+  identity: string,
+): string {
+  const footprint =
+    `<!-- gsynchro:v1 id=${identity} registered=${new Date().toISOString()} -->\n`;
+
+  /* Keep YAML frontmatter as the first block in the document. */
+  if (content.startsWith('---\n') || content.startsWith('---\r\n')) {
+    const newline = content.includes('\r\n') ? '\r\n' : '\n';
+    const closing = content.indexOf(`${newline}---${newline}`, 4);
+    if (closing !== -1) {
+      const insertAt = closing + newline.length + 3 + newline.length;
+      return `${content.slice(0, insertAt)}${footprint.replaceAll('\n', newline)}${content.slice(insertAt)}`;
+    }
+  }
+
+  return `${footprint}${content}`;
+}
+
+async function ensureMarkdownIdentity(
+  file: CandidateFile,
+  preferredIdentity?: string,
+): Promise<{ identity?: string; changed: boolean }> {
+  if (!isMarkdownPath(file.relativePath)) {
+    return { changed: false };
+  }
+
+  let content: string;
+  try {
+    content = await readFile(file.absolutePath, 'utf8');
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to read ${file.relativePath} while registering identity: ${detail}`,
+      { cause: error },
+    );
+  }
+
+  const existing = identityFromContent(content);
+  if (existing) {
+    return { identity: existing, changed: false };
+  }
+
+  const identity = preferredIdentity ?? randomUUID();
+  const updated = addMarkdownIdentity(content, identity);
+  await writeFile(file.absolutePath, updated, 'utf8');
+  return { identity, changed: true };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Scanning                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -1295,6 +1355,7 @@ async function collectCandidates(
 
 async function scanSide(
   side: Side,
+  preferredIdentities: ReadonlyMap<string, string> = new Map(),
 ): Promise<Map<string, FileSnapshot>> {
   const root = sideRoot(side);
   const { files, oversized } = await collectCandidates(
@@ -1311,8 +1372,14 @@ async function scanSide(
   }
 
   const result = new Map<string, FileSnapshot>();
+  const identities = new Map<string, string>();
 
   for (const file of files) {
+    const registration = await ensureMarkdownIdentity(
+      file,
+      preferredIdentities.get(file.relativePath),
+    );
+
     let hash: string;
 
     try {
@@ -1331,7 +1398,18 @@ async function scanSide(
       hash,
       size: file.size,
       mtimeMs: file.mtimeMs,
+      identity: registration.identity,
     });
+
+    if (registration.identity) {
+      const duplicate = identities.get(registration.identity);
+      if (duplicate && duplicate !== file.relativePath) {
+        throw new Error(
+          `Duplicate gsynchro identity ${registration.identity} on ${sideLabel(side)}: ${duplicate} and ${file.relativePath}`,
+        );
+      }
+      identities.set(registration.identity, file.relativePath);
+    }
   }
 
   return result;
@@ -1343,10 +1421,14 @@ async function scanCurrentState(): Promise<CurrentState> {
    */
   await validateRoots();
 
-  const [repo, drive] = await Promise.all([
-    scanSide('repo'),
-    scanSide('drive'),
-  ]);
+  const repo = await scanSide('repo');
+  const repoIdentities = new Map<string, string>();
+  for (const [relativePath, snapshot] of repo) {
+    if (snapshot.identity) {
+      repoIdentities.set(relativePath, snapshot.identity);
+    }
+  }
+  const drive = await scanSide('drive', repoIdentities);
 
   return {
     repo,
