@@ -1390,6 +1390,10 @@ async function ensureMarkdownIdentity(
   try {
     content = await readFile(file.absolutePath, 'utf8');
   } catch (error) {
+    // Let the scanner handle files removed after candidate collection.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw error;
+    }
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
       `Failed to read ${file.relativePath} while registering identity: ${detail}`,
@@ -1531,16 +1535,20 @@ async function scanSide(
   const identities = new Map<string, string>();
 
   for (const file of files) {
-    const registration = await ensureMarkdownIdentity(
-      file,
-      preferredIdentities.get(file.relativePath),
-    );
-
+    let registration: Awaited<ReturnType<typeof ensureMarkdownIdentity>>;
     let hash: string;
 
     try {
+      registration = await ensureMarkdownIdentity(
+        file,
+        preferredIdentities.get(file.relativePath),
+      );
       hash = await hashFile(file.absolutePath);
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        debug(`SCAN ${sideLabel(side)} file removed during scan: ${file.relativePath}`);
+        continue;
+      }
       const detail = error instanceof Error
         ? error.message
         : String(error);
