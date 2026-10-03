@@ -1560,8 +1560,9 @@ async function scanSide(
     if (registration.identity) {
       const duplicate = identities.get(registration.identity);
       if (duplicate && duplicate !== file.relativePath) {
-        throw new Error(
-          `Duplicate gsynchro identity ${registration.identity} on ${sideLabel(side)}: ${duplicate} and ${file.relativePath}`,
+        console.warn(
+          `${label('⚠️', 'Warning', 'yellow')}: Duplicate gsynchro identity ${registration.identity} on ${sideLabel(side)}: ${duplicate} and ${file.relativePath}. ` +
+          'Sync will continue; remove the unneeded duplicate manually.',
         );
       }
       identities.set(registration.identity, file.relativePath);

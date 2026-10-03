@@ -482,6 +482,8 @@ The project directory always wins a conflict, including a conflict between a pro
 
 Managed Markdown files receive a hidden `gsynchro:v1` GUID comment between YAML frontmatter and document content. Files first seen in the repository are marked before they are copied to Drive; files first seen on Drive are marked there and then copied to the repository. Preserve this comment when editing or moving a Markdown file. The identifier is currently used for diagnostics and collision detection while move planning remains path based during the experiment.
 
+Duplicate identities produce a warning showing the affected side and file paths. Synchronization continues using the normal path-based rules; remove the unneeded duplicate manually from the repository or destination.
+
 The saved `.gsynchro/gsynchro.status` also records the identity for each tracked path and inside each repository or destination snapshot. This preserves the evidence needed to recognize a later unlink plus appearance at another path as a move once ID based move planning is enabled.
 
 Each machine also has a local `.gsynchro/machine-id.json`, ignored by Git. Status files record the machine ID, synchronization ID, timestamp, triggering events, operations, and result. A side-local status is written to `destination/.gsynchro/gsynchro.status` as diagnostic evidence from the Drive side. These files help reconstruct what happened across machines; they do not coordinate or block simultaneous processes.
