@@ -234,27 +234,51 @@ function paint(value: string, ...tones: Tone[]): string {
   return `${tones.map((tone) => ANSI[tone]).join('')}${value}${ANSI.reset}`;
 }
 
+function emojiText(emoji: string, text: string): string {
+  return `${emoji}  ${text}`;
+}
+
 function label(
   emoji: string,
   plain: string,
   tone: Tone,
 ): string {
   return STYLED_OUTPUT
-    ? `${emoji} ${paint(plain, 'bold', tone)}`
+    ? emojiText(emoji, paint(plain, 'bold', tone))
     : `[${plain.toLowerCase()}]`;
 }
 
 function sideLabel(side: Side): string {
-  const name = side === 'repo' ? 'repository' : 'destination';
+  const name = side;
 
   return STYLED_OUTPUT
     ? paint(name, 'bold', side === 'repo' ? 'blue' : 'cyan')
     : name;
 }
 
+function compactOperationReason(reason: string): string {
+  if (reason.includes('conflict')) {
+    return 'conflict';
+  }
+
+  if (reason.startsWith('new ')) {
+    return 'new';
+  }
+
+  if (reason.startsWith('changed ')) {
+    return 'changed';
+  }
+
+  if (reason.startsWith('deleted ')) {
+    return 'deleted';
+  }
+
+  return reason;
+}
+
 function printBanner(version: string): void {
   if (STYLED_OUTPUT) {
-    console.log(`\n${paint('🔁 gsynchro', 'bold', 'cyan')} ${paint(`v${version}`, 'bold', 'yellow')} ${paint('bidirectional file sync', 'dim')}`);
+    console.log(`\n${paint(emojiText('🔁', 'gsynchro'), 'bold', 'cyan')} ${paint(`v${version}`, 'bold', 'yellow')} ${paint('bidirectional file sync', 'dim')}`);
     return;
   }
 
@@ -1532,7 +1556,7 @@ async function scanSide(
   }
 
   const result = new Map<string, FileSnapshot>();
-  const identities = new Map<string, string>();
+  const identities = new Map<string, string[]>();
 
   for (const file of files) {
     let registration: Awaited<ReturnType<typeof ensureMarkdownIdentity>>;
@@ -1566,14 +1590,18 @@ async function scanSide(
     });
 
     if (registration.identity) {
-      const duplicate = identities.get(registration.identity);
-      if (duplicate && duplicate !== file.relativePath) {
-        console.warn(
-          `${label('⚠️', 'Warning', 'yellow')}: Duplicate gsynchro identity ${registration.identity} on ${sideLabel(side)}: ${duplicate} and ${file.relativePath}. ` +
-          'Sync will continue; remove the unneeded duplicate manually.',
-        );
-      }
-      identities.set(registration.identity, file.relativePath);
+      const paths = identities.get(registration.identity) ?? [];
+      paths.push(file.relativePath);
+      identities.set(registration.identity, paths);
+    }
+  }
+
+  for (const [identity, paths] of identities) {
+    if (paths.length > 1) {
+      console.warn(
+        `${label('⚠️', 'duplicate detected', 'yellow')} on ${sideLabel(side)} file id:${identity.slice(0, 8)}\n` +
+        paths.map((relativePath) => `  - ${relativePath}`).join('\n'),
+      );
     }
   }
 
@@ -1912,13 +1940,13 @@ async function executePlan(
         operation.reason.includes('conflict')
       ) {
         console.warn(
-          `${label('⚠️', 'Conflict', 'yellow')} ${operation.path} — repository wins`,
+          `${label('⚠️', 'Conflict', 'yellow')} ${operation.path} — repo wins`,
         );
       }
 
       console.log(
-        `${label('➡️', 'Sync', 'cyan')} ${sideLabel(operation.from)} → ${sideLabel(operation.to)} ` +
-        `${operation.path} (${operation.reason})`,
+        `${label('➡️', 'Sync', 'cyan')} ${sideLabel(operation.from)} -> ${sideLabel(operation.to)} ` +
+        `${operation.path} (${compactOperationReason(operation.reason)})`,
       );
 
       await copyBetweenSides(
@@ -1932,7 +1960,7 @@ async function executePlan(
 
     console.log(
       `${label('🗑️', 'Trash', 'yellow')} ${sideLabel(operation.side)} ${operation.path} ` +
-      `(${operation.reason})`,
+      `(${compactOperationReason(operation.reason)})`,
     );
 
     await moveToTrash(
@@ -2097,7 +2125,7 @@ async function reconcile(): Promise<void> {
       });
 
       console.log(
-        `${label('✅', 'Up to date', 'green')} repository and destination already match`,
+        `${label('✅', 'Up to date', 'green')} repo and drive already match`,
       );
 
       return;
@@ -2418,12 +2446,12 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log(`  ${paint('Repository', 'bold')}:  ${REPO_ROOT}`);
-  console.log(`  ${paint('Destination', 'bold')}: ${DRIVE_ROOT}`);
+  console.log(`  ${paint('Repo', 'bold')}:  ${REPO_ROOT}`);
+  console.log(`  ${paint('Drive', 'bold')}: ${DRIVE_ROOT}`);
   console.log(`  ${paint('Debounce', 'bold')}:    ${config.debounce}s`);
   console.log(`  ${paint('Max file size', 'bold')}: 10 MiB`);
   console.log(`  ${paint('Extensions', 'bold')}:  ${config.extensions.join(' ')}`);
-  console.log(`  ${paint('Conflicts', 'bold')}:   repository wins`);
+  console.log(`  ${paint('Conflicts', 'bold')}:   repo wins`);
   debug('Debug enabled; RAW events precede normalized EVENT and QUEUE logs');
 
   /*
@@ -2438,7 +2466,7 @@ async function main(): Promise<void> {
     createWatcher('drive');
 
   console.log(
-    `${label('👀', 'Watching', 'green')} repository and destination for changes`,
+    `${label('👀', 'Watching', 'green')} repo and drive for changes`,
   );
 
   process.on('SIGINT', () => {
