@@ -1,6 +1,6 @@
 {
   "name": "gsynchro",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "Bidirectional sync of selected project files with a locally mounted folder",
   "keywords": [
     "sync",
