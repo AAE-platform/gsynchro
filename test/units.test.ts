@@ -139,16 +139,16 @@ describe('configuration', () => {
 });
 
 describe('console output', () => {
-  const date = new Date(2026, 0, 2, 3, 4, 5);
+  const date = new Date(2026, 0, 2, 3, 4, 5, 6);
 
-  test('clockTime is HH:MM:ss', () => {
-    assert.equal(clockTime(date), '03:04:05');
+  test('clockTime is HH:MM:ss.fff', () => {
+    assert.equal(clockTime(date), '03:04:05.006');
   });
 
   test('every non-empty line gets the time, blank lines stay blank', () => {
     assert.equal(
       withTimestamp('\nfirst\n  second', date),
-      '\n03:04:05 first\n03:04:05   second',
+      '\n03:04:05.006 first\n03:04:05.006   second',
     );
   });
 
@@ -162,7 +162,7 @@ describe('console output', () => {
     log.error('c');
     log.debug('d', { x: 1 });
 
-    const stamped = /^\d{2}:\d{2}:\d{2} /;
+    const stamped = /^\d{2}:\d{2}:\d{2}\.\d{3} /;
     assert.ok([...out, ...err].every((line) => stamped.test(line)));
     assert.equal(err.length, 2);
     assert.match(out[1]!, /\[debug\] d \{ x: 1 \}$/);

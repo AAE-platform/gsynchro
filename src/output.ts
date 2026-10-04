@@ -18,8 +18,14 @@ export function paint(value: string, ...tones: Tone[]): string {
   return tones.reduceRight((text, tone) => colors[tone](text), value);
 }
 
+/*
+ * A tab, not spaces, after the emoji: terminals disagree on the width of
+ * emoji such as ♻️ (a text symbol plus U+FE0F), but a tab always moves to
+ * the next multiple of 8 from wherever the terminal thinks the cursor is,
+ * so the text lines up after any emoji.
+ */
 export function emojiText(emoji: string, text: string): string {
-  return `${emoji}  ${text}`;
+  return `${emoji}\t${text}`;
 }
 
 export function label(
@@ -71,16 +77,17 @@ export interface LogSink {
   err(line: string): void;
 }
 
-/** Local wall-clock time as HH:MM:ss. */
+/** Local wall-clock time as HH:MM:ss.fff. */
 export function clockTime(date = new Date()): string {
-  return [date.getHours(), date.getMinutes(), date.getSeconds()]
+  const time = [date.getHours(), date.getMinutes(), date.getSeconds()]
     .map((value) => String(value).padStart(2, '0'))
     .join(':');
+  return `${time}.${String(date.getMilliseconds()).padStart(3, '0')}`;
 }
 
 /** Prefixes every non-empty line of a message with the time. */
 export function withTimestamp(message: string, date = new Date()): string {
-  const time = paint(clockTime(date), 'gray');
+  const time = paint(clockTime(date), 'dim', 'gray');
   return message
     .split('\n')
     .map((line) => (line ? `${time} ${line}` : line))

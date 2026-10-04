@@ -371,9 +371,9 @@ describe('console output', () => {
     assert.deepEqual(
       fx.output.slice(before).filter(Boolean).map((line) => line.replace(/\(\d+ ms\)/, '(N ms)')),
       [
-        '♻️  syncing ...',
-        '📝  [repo] file:notes.txt CHANGED',
-        '✅  1 operation applied (N ms)',
+        '♻️\tsyncing ...',
+        '📝\t[repo] file:notes.txt CHANGED',
+        '✅\t1 operation applied (N ms)',
       ],
     );
   });
@@ -386,7 +386,7 @@ describe('console output', () => {
 
     assert.deepEqual(
       fx.output.slice(before).filter(Boolean).map((line) => line.replace(/\(\d+ ms\)/, '(N ms)')),
-      ['♻️  syncing ...', '💤  nothing to do (N ms)'],
+      ['♻️\tsyncing ...', '💤\tnothing to do (N ms)'],
     );
   });
 
@@ -395,6 +395,6 @@ describe('console output', () => {
 
     await fx.sync();
 
-    assert.match(fx.output.at(-1)!, /^💥  sync failed \(\d+ ms\): /);
+    assert.match(fx.output.at(-1)!, /^💥\tsync failed \(\d+ ms\): /);
   });
 });

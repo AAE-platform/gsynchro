@@ -448,7 +448,7 @@ npx gsynchro --debug
 
 Other options: `--setup` reopens the configuration wizard, `--version` prints the version, and `--help` lists all options. Press Ctrl+C to stop: gsynchro finishes a synchronization in progress before exiting; press it again to exit immediately.
 
-Every log line starts with the local time (`HH:MM:ss`). When run in an interactive terminal, `gsynchro` uses color and compact status icons to make synchronization activity easier to scan. Set the standard `NO_COLOR` environment variable, or pass `--no-color`, for plain output; output is also plain when redirected to a file or another process.
+Every log line starts with the local time (`HH:MM:ss.fff`). When run in an interactive terminal, `gsynchro` uses color and compact status icons to make synchronization activity easier to scan. Set the standard `NO_COLOR` environment variable, or pass `--no-color`, for plain output; output is also plain when redirected to a file or another process.
 
 Debug output includes timestamps and filesystem events, filter decisions, debounce activity, and the reconciliation plan. The watcher uses polling for the destination directory to improve change detection on mounted filesystems. As a fallback when a mount does not emit a filesystem event, gsynchro compares tracked file paths, sizes, and modification times every 60 seconds and synchronizes detected changes. Remote changes become visible according to the mount client's cache behavior; `gsynchro` cannot detect a remote change before the mounted filesystem reports it.
 

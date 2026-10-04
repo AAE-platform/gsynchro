@@ -74,4 +74,4 @@ Every behaviour change or bug fix needs a test, preferably an integration test u
 - ESM with `.js` extensions in relative imports (`NodeNext`), strict TypeScript.
 - Dependencies are kept minimal (chokidar, fast-glob, yaml, picocolors). Ask before adding one.
 - Code, comments and documentation are in English.
-- Console output goes through the `Logger` of the context, never `console.*` directly (except `--help`/`--version` and the interactive setup wizard). The logger prefixes every line with `HH:MM:ss`; colors come from `paint()` in `src/output.ts` (picocolors) and are off when output is not a TTY, with `NO_COLOR`, or with `--no-color`.
+- Console output goes through the `Logger` of the context, never `console.*` directly (except `--help`/`--version` and the interactive setup wizard). The logger prefixes every line with `HH:MM:ss.fff`; `emojiText()` puts a tab after the emoji so text lines up whatever width the terminal gives the emoji; colors come from `paint()` in `src/output.ts` (picocolors) and are off when output is not a TTY, with `NO_COLOR`, or with `--no-color`.

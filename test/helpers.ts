@@ -59,7 +59,7 @@ export function createTestLogger(
 export interface Fixture {
   base: string;
   ctx: SyncContext;
-  /** Console lines printed so far, without the HH:MM:ss prefix. */
+  /** Console lines printed so far, without the HH:MM:ss.fff prefix. */
   output: string[];
   root(side: Side): string;
   write(side: Side, relativePath: string, content: string | Buffer): Promise<void>;
@@ -104,7 +104,7 @@ export async function createFixture(
     base,
     ctx,
     get output() {
-      return captured.map((line) => line.replace(/^\d{2}:\d{2}:\d{2} /, ''));
+      return captured.map((line) => line.replace(/^\d{2}:\d{2}:\d{2}\.\d{3} /, ''));
     },
     root,
     async write(side, relativePath, content) {
