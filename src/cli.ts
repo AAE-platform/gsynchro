@@ -95,6 +95,14 @@ type SyncOperation =
       side: Side;
       path: string;
       reason: string;
+    }
+  | {
+      type: 'move';
+      from: Side;
+      to: Side;
+      previousPath: string;
+      path: string;
+      reason: string;
     };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -262,26 +270,6 @@ function sideLabel(side: Side): string {
   return STYLED_OUTPUT
     ? paint(name, 'bold', side === 'repo' ? 'blue' : 'cyan')
     : name;
-}
-
-function compactOperationReason(reason: string): string {
-  if (reason.includes('conflict')) {
-    return 'conflict';
-  }
-
-  if (reason.startsWith('new ')) {
-    return 'new';
-  }
-
-  if (reason.startsWith('changed ')) {
-    return 'changed';
-  }
-
-  if (reason.startsWith('deleted ')) {
-    return 'deleted';
-  }
-
-  return reason;
 }
 
 function printBanner(version: string): void {
@@ -522,6 +510,59 @@ function hashEqual(
   }
 
   return snapshot.hash === hash;
+}
+
+function uniqueIdentityPaths(
+  snapshots: ReadonlyMap<string, FileSnapshot>,
+): Map<string, string> {
+  const paths = new Map<string, string>();
+  const duplicates = new Set<string>();
+
+  for (const [relativePath, snapshot] of snapshots) {
+    if (!snapshot.identity) {
+      continue;
+    }
+
+    if (paths.has(snapshot.identity)) {
+      duplicates.add(snapshot.identity);
+      continue;
+    }
+
+    paths.set(snapshot.identity, relativePath);
+  }
+
+  for (const identity of duplicates) {
+    paths.delete(identity);
+  }
+
+  return paths;
+}
+
+function uniquePreviousIdentityPaths(
+  status: StatusFile,
+): Map<string, { path: string; entry: StatusEntry }> {
+  const locations = new Map<string, { path: string; entry: StatusEntry }>();
+  const duplicates = new Set<string>();
+
+  for (const [relativePath, entry] of Object.entries(status.files)) {
+    const identity = entry.identity ?? entry.repo?.identity ?? entry.drive?.identity;
+    if (!identity || !entry.repo || !entry.drive) {
+      continue;
+    }
+
+    if (locations.has(identity)) {
+      duplicates.add(identity);
+      continue;
+    }
+
+    locations.set(identity, { path: relativePath, entry });
+  }
+
+  for (const identity of duplicates) {
+    locations.delete(identity);
+  }
+
+  return locations;
 }
 
 async function pathExists(target: string): Promise<boolean> {
@@ -1640,11 +1681,64 @@ async function scanCurrentState(): Promise<CurrentState> {
 /* Reconciliation                                                             */
 /* -------------------------------------------------------------------------- */
 
+function detectMoves(
+  previousStatus: StatusFile,
+  current: CurrentState,
+): { operations: SyncOperation[]; handledPaths: Set<string> } {
+  const operations: SyncOperation[] = [];
+  const handledPaths = new Set<string>();
+  const previousLocations = uniquePreviousIdentityPaths(previousStatus);
+  const repoPaths = uniqueIdentityPaths(current.repo);
+  const drivePaths = uniqueIdentityPaths(current.drive);
+
+  for (const [identity, previous] of previousLocations) {
+    const repoPath = repoPaths.get(identity);
+    const drivePath = drivePaths.get(identity);
+
+    if (!repoPath || !drivePath || repoPath === drivePath) {
+      continue;
+    }
+
+    const previousHash = previous.entry.commonHash;
+    const repoMoved =
+      repoPath !== previous.path &&
+      drivePath === previous.path &&
+      !current.drive.has(repoPath) &&
+      hashEqual(current.drive.get(drivePath), previousHash);
+    const driveMoved =
+      drivePath !== previous.path &&
+      repoPath === previous.path &&
+      !current.repo.has(drivePath) &&
+      hashEqual(current.repo.get(repoPath), previousHash);
+
+    if (!repoMoved && !driveMoved) {
+      continue;
+    }
+
+    const from: Side = repoMoved ? 'repo' : 'drive';
+    const to: Side = repoMoved ? 'drive' : 'repo';
+    const path = repoMoved ? repoPath : drivePath;
+
+    operations.push({
+      type: 'move',
+      from,
+      to,
+      previousPath: previous.path,
+      path,
+      reason: `moved on ${from}`,
+    });
+    handledPaths.add(previous.path);
+    handledPaths.add(path);
+  }
+
+  return { operations, handledPaths };
+}
+
 function buildSyncPlan(
   previousStatus: StatusFile,
   current: CurrentState,
 ): SyncOperation[] {
-  const operations: SyncOperation[] = [];
+  const { operations, handledPaths } = detectMoves(previousStatus, current);
 
   const allPaths = new Set<string>([
     ...Object.keys(previousStatus.files),
@@ -1653,6 +1747,10 @@ function buildSyncPlan(
   ]);
 
   for (const relativePath of allPaths) {
+    if (handledPaths.has(relativePath)) {
+      continue;
+    }
+
     const previous =
       previousStatus.files[relativePath];
 
@@ -1816,16 +1914,17 @@ function buildSyncPlan(
 async function copyBetweenSides(
   from: Side,
   to: Side,
-  relativePath: string,
+  sourcePath: string,
+  destinationPath = sourcePath,
 ): Promise<void> {
   const source = path.join(
     sideRoot(from),
-    relativePath,
+    sourcePath,
   );
 
   const destination = path.join(
     sideRoot(to),
-    relativePath,
+    destinationPath,
   );
 
   /*
@@ -1838,13 +1937,13 @@ async function copyBetweenSides(
     sourceInfo.isSymbolicLink()
   ) {
     throw new Error(
-      `Source is no longer a regular file: ${relativePath}`,
+      `Source is no longer a regular file: ${sourcePath}`,
     );
   }
 
   if (sourceInfo.size > MAX_FILE_SIZE) {
     throw new Error(
-      `Source became larger than 10 MiB: ${relativePath}`,
+      `Source became larger than 10 MiB: ${sourcePath}`,
     );
   }
 
@@ -1952,6 +2051,20 @@ async function executePlan(
       continue;
     }
 
+    if (operation.type === 'move') {
+      await copyBetweenSides(
+        operation.from,
+        operation.to,
+        operation.path,
+      );
+      await moveToTrash(
+        operation.to,
+        operation.previousPath,
+      );
+
+      continue;
+    }
+
     await moveToTrash(
       operation.side,
       operation.path,
@@ -1962,22 +2075,43 @@ async function executePlan(
 function printCompletedOperations(operations: SyncOperation[]): void {
   for (const operation of operations) {
     if (operation.type === 'copy') {
-      if (operation.reason.includes('conflict')) {
-        console.warn(
-          `${label('⚠️', 'Conflict', 'yellow')} ${operation.path} — repo wins`,
-        );
-      }
+      const action = operation.reason.includes('conflict')
+        ? 'CONFLICT'
+        : operation.reason.startsWith('new ')
+          ? 'NEW'
+          : 'CHANGED';
+      const emoji = action === 'CONFLICT'
+        ? '⚠️'
+        : action === 'NEW'
+          ? '▶️'
+          : '📝';
+      const write = action === 'CONFLICT' ? console.warn : console.log;
+      write(
+        emojiText(
+          emoji,
+          `[${sideLabel(operation.from)}] file:${operation.path} ${paint(action, 'bold')}`,
+        ),
+      );
+      continue;
+    }
 
+    if (operation.type === 'move') {
       console.log(
-        `${label('➡️', 'Sync', 'cyan')} ${sideLabel(operation.from)} -> ${sideLabel(operation.to)} ` +
-        `${operation.path} (${compactOperationReason(operation.reason)})`,
+        emojiText(
+          '↪️',
+          `[${sideLabel(operation.from)}] file:${path.basename(operation.path)} ` +
+          `${paint('MOVED', 'bold')} ${path.dirname(operation.previousPath)} -> ${path.dirname(operation.path)}`,
+        ),
       );
       continue;
     }
 
     console.log(
-      `${label('🗑️', 'Trash', 'yellow')} ${sideLabel(operation.side)} ${operation.path} ` +
-      `(${compactOperationReason(operation.reason)})`,
+      emojiText(
+        '❎',
+        `[${sideLabel(operation.side === 'repo' ? 'drive' : 'repo')}] ` +
+        `file:${operation.path} ${paint('DELETED', 'bold')}`,
+      ),
     );
   }
 }

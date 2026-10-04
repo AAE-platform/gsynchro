@@ -480,7 +480,7 @@ After the first successful reconciliation, `gsynchro` uses the saved common hash
 
 The project directory always wins a conflict, including a conflict between a project-side deletion and a destination-side edit.
 
-Managed Markdown files receive a hidden `gsynchro:v1` GUID comment between YAML frontmatter and document content. Files first seen in the repository are marked before they are copied to Drive; files first seen on Drive are marked there and then copied to the repository. Preserve this comment when editing or moving a Markdown file. The identifier is currently used for diagnostics and collision detection while move planning remains path based during the experiment.
+Managed Markdown files receive a hidden `gsynchro:v1` GUID comment between YAML frontmatter and document content. Files first seen in the repository are marked before they are copied to Drive; files first seen on Drive are marked there and then copied to the repository. Preserve this comment when editing or moving a Markdown file. When the saved status confirms a file was shared at one path and one side moves its unchanged-ID copy while the other side retains the original unchanged copy, gsynchro propagates that move instead of creating a duplicate.
 
 Duplicate identities produce a warning showing the affected side and file paths. Synchronization continues using the normal path-based rules; remove the unneeded duplicate manually from the repository or destination.
 
