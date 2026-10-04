@@ -2135,9 +2135,26 @@ function printFinalStateWarnings(current: CurrentState): void {
     );
   }
 
+  const duplicateGroups = new Map<
+    string,
+    { identity: string; paths: string[]; sides: Side[] }
+  >();
   for (const duplicate of current.duplicateIdentities) {
+    const paths = [...duplicate.paths].sort();
+    const key = `${duplicate.identity}\u0000${paths.join('\u0000')}`;
+    const group = duplicateGroups.get(key) ?? {
+      identity: duplicate.identity,
+      paths,
+      sides: [],
+    };
+    group.sides.push(duplicate.side);
+    duplicateGroups.set(key, group);
+  }
+
+  for (const duplicate of duplicateGroups.values()) {
+    const sides = duplicate.sides.map(sideLabel).join(' and ');
     console.warn(
-      `${label('⚠️', 'duplicate detected', 'yellow')} on ${sideLabel(duplicate.side)} file id:${duplicate.identity.slice(0, 8)}\n` +
+      `${label('⚠️', 'duplicate detected', 'yellow')} on ${sides} file id:${duplicate.identity.slice(0, 8)}\n` +
       duplicate.paths.map((relativePath) => `  - ${relativePath}`).join('\n'),
     );
   }
@@ -2439,9 +2456,6 @@ function scheduleReconcile(): void {
   if (debounceTimer) {
     clearTimeout(debounceTimer);
   }
-  if (fallbackScanTimer) {
-    clearInterval(fallbackScanTimer);
-  }
 
   debounceTimer = setTimeout(() => {
     debounceTimer = undefined;
@@ -2506,6 +2520,7 @@ async function queueUnobservedChanges(): Promise<void> {
 }
 
 function startFallbackScan(): void {
+  void queueUnobservedChanges();
   fallbackScanTimer = setInterval(() => {
     void queueUnobservedChanges();
   }, FALLBACK_SCAN_INTERVAL_MS);
@@ -2626,6 +2641,9 @@ async function shutdown(
 
   if (debounceTimer) {
     clearTimeout(debounceTimer);
+  }
+  if (fallbackScanTimer) {
+    clearInterval(fallbackScanTimer);
   }
 
   await Promise.all([
