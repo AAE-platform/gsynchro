@@ -11,11 +11,14 @@ Thank you for improving `gsynchro`.
    ```bash
    npm install
    npm run typecheck
+   npm test
    npm run build
    npm pack --dry-run
    ```
 
-4. Update `README.md` and, for Linux mount changes, `docs/linux-rclone.md` whenever the user-visible behavior or setup changes.
+4. Add or update tests for the behavior you change. Integration tests in `test/sync.test.ts` synchronize two temporary folders; see [AGENTS.md](AGENTS.md) for the module layout and the safety invariants.
+5. Describe the change in `CURRENT_CHANGE.md` (a `# Title` line and a description). Do not edit `CHANGE_LOG.md` or the version: the release script handles them.
+6. Update `README.md` and, for Linux mount changes, `docs/linux-rclone.md` whenever the user-visible behavior or setup changes.
 
 ## Pull requests
 

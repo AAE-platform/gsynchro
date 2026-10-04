@@ -446,7 +446,9 @@ Enable detailed watcher and reconciliation logs with:
 npx gsynchro --debug
 ```
 
-When run in an interactive terminal, `gsynchro` uses color and compact status icons to make synchronization activity easier to scan. Set the standard `NO_COLOR` environment variable, or pass `--no-color`, for plain output; output is also plain when redirected to a file or another process.
+Other options: `--setup` reopens the configuration wizard, `--version` prints the version, and `--help` lists all options. Press Ctrl+C to stop: gsynchro finishes a synchronization in progress before exiting; press it again to exit immediately.
+
+Every log line starts with the local time (`HH:MM:ss`). When run in an interactive terminal, `gsynchro` uses color and compact status icons to make synchronization activity easier to scan. Set the standard `NO_COLOR` environment variable, or pass `--no-color`, for plain output; output is also plain when redirected to a file or another process.
 
 Debug output includes timestamps and filesystem events, filter decisions, debounce activity, and the reconciliation plan. The watcher uses polling for the destination directory to improve change detection on mounted filesystems. As a fallback when a mount does not emit a filesystem event, gsynchro compares tracked file paths, sizes, and modification times every 60 seconds and synchronizes detected changes. Remote changes become visible according to the mount client's cache behavior; `gsynchro` cannot detect a remote change before the mounted filesystem reports it.
 
@@ -501,12 +503,14 @@ Keep `.trash/` even when status history is enabled. It can recover a file that g
 The following rules are always applied, regardless of the configured `items` patterns:
 
 - Only files whose extension is listed in `extensions` are eligible (default: `.md`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.pdf`); matching is case-insensitive. Unlike the other rules below, this one is configurable — see [Configuration fields](#configuration-fields).
-- Files larger than 10 MiB are skipped.
+- Files larger than 10 MiB are skipped. A file that grows beyond the limit after it was synchronized is left alone on both sides: it is neither copied nor treated as deleted.
 - `.git/`, `node_modules/`, `.gsynchro/`, and `.trash/` directories are excluded.
 - The generated destination-root `GSYNCHRO.md` notice is excluded from ordinary synchronization.
 - Symbolic links are not followed or synchronized.
 - The project root and destination cannot be the same directory or contain one another.
 - Both roots are validated before missing files can be interpreted as deletions.
+- After a first synchronization, the destination must still contain gsynchro's `.gsynchro/` directory or `GSYNCHRO.md` notice. An unmounted rclone or FUSE mount point is an ordinary empty directory; without these markers gsynchro refuses to run instead of treating every file as deleted on the destination. If the destination really was replaced on purpose, run `gsynchro --setup` to write the markers again.
+- A file that cannot be read aborts the synchronization; it is never treated as deleted.
 - Files outside the eligible set are invisible to synchronization and are not treated as deleted.
 
 ## State and Git ignore
@@ -566,25 +570,39 @@ Clone the repository, then install dependencies and validate the change:
 ```bash
 npm install
 npm run typecheck
+npm test
 npm run build
 npm pack --dry-run
 ```
 
-The published package includes only the compiled CLI, this README, the license, and the diagram; inspect the exact tarball before every release:
+The tests use Node's built-in test runner. Most of them synchronize two real temporary folders, which is all gsynchro does: see `test/helpers.ts`. Each run writes the complete console output of those synchronizations to `test-results/console.log` and the test report to `test-results/report.txt`. Set `GSYNCHRO_TEST_DEBUG=1` to include debug lines. The source is split into small modules described in [AGENTS.md](https://github.com/FVilli/gsynchro/blob/main/AGENTS.md), which also lists the safety invariants every change must preserve.
+
+The published package includes only the compiled CLI, this README, the change log, the license, and the diagram; inspect the exact tarball before every release:
 
 ```bash
 npm pack --dry-run
 ```
 
-To publish a release, start with a clean Git working tree and a configured Git push remote. The release script checks npm authentication and starts interactive `npm login` if needed, asks for confirmation, creates the version commit and tag, pushes the branch and tag, then publishes to npm. The npm account must have publish access:
+### Change log and releases
+
+While developing, describe the change in progress in `CURRENT_CHANGE.md`: a `# Title` line followed by a description. To publish, run:
 
 ```bash
 npm run release -- patch
 ```
 
-Use `minor` or `major` instead of `patch` when appropriate. If Git push fails, fix Git access and run `git push --follow-tags`, then `npm publish`; if npm publishing fails after the push, fix npm access and run `npm publish`. In either case, do not run the release script again for that version.
+Use `minor` or `major` instead of `patch` when appropriate. The release script:
 
-`prepublishOnly` runs the typecheck and build immediately before publishing. Enable npm two-factor authentication for publishing; consider npm trusted publishing with OpenID Connect when releases are automated.
+1. reads the title and description from `CURRENT_CHANGE.md`, and refuses to continue if the title is empty;
+2. checks that the branch has a Git upstream, checks npm authentication (starting interactive `npm login` if needed), and runs the typecheck and tests;
+3. shows the new version, the commit message, and every pending file, then asks for confirmation;
+4. bumps the version, appends the change to `CHANGE_LOG.md`, and resets `CURRENT_CHANGE.md`;
+5. commits **all pending changes** as `[published] vX.Y.Z <title>`, creates the `vX.Y.Z` tag, and pushes both;
+6. publishes to npm.
+
+If a step fails, the script prints how to recover. Before the commit, it restores the files it changed. If the push fails, fix Git access and run `git push --follow-tags`, then `npm publish`. If only publishing fails, fix npm access and run `npm publish`. In either case, do not run the release script again for that version.
+
+`prepublishOnly` runs the typecheck, tests, and build immediately before publishing. Enable npm two-factor authentication for publishing; consider npm trusted publishing with OpenID Connect when releases are automated.
 
 ## License
 
