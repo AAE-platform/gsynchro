@@ -450,6 +450,67 @@ Other options: `--setup` reopens the configuration wizard, `--version` prints th
 
 Every log line starts with the local time (`HH:MM:ss.fff`). When run in an interactive terminal, `gsynchro` uses color and compact status icons to make synchronization activity easier to scan. Set the standard `NO_COLOR` environment variable, or pass `--no-color`, for plain output; output is also plain when redirected to a file or another process.
 
+### Reading the console log
+
+The console log is part of what gsynchro offers, not just a debugging aid. Synchronizing two folders through a cloud mount involves several independent actors: you, an editor, the Drive client or rclone, the filesystem watcher, and gsynchro itself. When something looks wrong, the log should show what each step saw and when it saw it. For this reason the log deliberately shows two layers and keeps every timestamp to the millisecond.
+
+Here is a file renamed in Drive, as gsynchro reports it (tabs shown as spaces):
+
+```text
+15:06:57.891 👀   [drive] file:tasks/Copia di PIANO-DI-ESECUZIONE.md UNLINK
+15:06:58.292 👀   [drive] file:tasks/SECUZIONE.md ADD
+
+15:07:03.293 ♻️   syncing ...
+15:07:03.882 ✍️   [drive] file:tasks/SECUZIONE.md RENAMED old name: Copia di PIANO-DI-ESECUZIONE.md
+15:07:03.882 ✅   1 operation applied (589 ms)
+
+15:07:09.377 ♻️   syncing ...
+15:07:09.905 💤   nothing to do (528 ms)
+```
+
+**Raw events (👀) are what the filesystem reported.** They come straight from the watcher on each side, unfiltered and uninterpreted. A rename is an `UNLINK` followed by an `ADD`, and an editor that saves through a temporary file may produce several events for a single save. gsynchro never acts on an event by itself: an event only means "something changed, rescan both sides soon".
+
+**The block between `♻️ syncing ...` and its result is what gsynchro concluded.** After a full scan of both sides and a comparison with the last common state, the raw `UNLINK` + `ADD` pair becomes a single `RENAMED`. Showing both layers lets you check the interpretation against the evidence. If gsynchro ever concludes something surprising, the events that led to it are directly above.
+
+**Echoes of gsynchro's own writes are not shown, but they are confirmed.** Applying the rename makes the repository watcher report an `UNLINK` and an `ADD` of its own, shortly after `✅`. The same happens with every copy, trashed file, and Markdown identity footprint that gsynchro writes. These echoes are an obvious consequence of the operation just printed, so they get no `👀` line. They still trigger one more synchronization, and its `💤 nothing to do` is the useful part: it confirms that both sides have converged and that no loop was started.
+
+An event counts as an echo when the file on that side already matches the state saved by the last synchronization, meaning the same size and modification time, or absent and not tracked. A real edit always changes one of the two, so it is never mistaken for an echo. With `--debug`, echoes appear as `ECHO … not shown` lines.
+
+Because the decision is made against the saved state, an event that arrives *after* the synchronization that already applied its change is not shown either. With the default `debounce` of 3 seconds, every event of a change arrives before its synchronization starts. With a `debounce` below about 1.5 seconds, the `👀` line of a change can occasionally be missing even though the change is synchronized correctly.
+
+**Timestamps measure the delays.** The time between an event and the next `♻️ syncing ...` is the waiting time. It includes:
+
+- the `debounce` setting (3 seconds by default), restarted by every new event so that a burst of changes produces one synchronization;
+- about half a second during which the watcher waits for a file to stop changing;
+- on the destination side, up to a second of polling interval.
+
+The time between `♻️ syncing ...` and its result, also printed in parentheses, is the work itself: scanning, hashing, copying, and verifying. Delays that happen *before* the first event, such as the Drive client downloading a remote change, are invisible to gsynchro. The timestamp of the first `👀` line is when the change actually reached the local folder.
+
+The `[repo]` or `[drive]` tag on an operation names the side where the change originated. `[drive] … RENAMED` means the file was renamed in Drive and the rename was applied to the repository. The same holds for `NEW`, `CHANGED`, `MOVED`, and `DELETED`.
+
+| Icon | Meaning |
+| --- | --- |
+| 👀 | Raw filesystem event (`ADD`, `CHANGE`, `UNLINK`) on one side; also shown when watching starts |
+| ♻️ | A synchronization starts |
+| ▶️ `NEW` | File created on one side, copied to the other |
+| 📝 `CHANGED` | File modified on one side, copied to the other |
+| ⚠️ `CONFLICT` | Both sides changed: the repository version wins. Also used for duplicate Markdown identities |
+| ✍️ `RENAMED` | File renamed in the same folder |
+| ➡️ `MOVED` | File moved to another folder (shows both paths if it was also renamed) |
+| ❎ `DELETED` | File deleted on one side; the other copy was moved to that side's `.trash/` |
+| ⏭️ | File skipped because it is larger than 10 MiB |
+| ✅ | Synchronization finished, with the number of operations and the duration |
+| 💤 | Synchronization found nothing to do: both sides already match. Expected after each applied synchronization, as confirmation |
+| 💥 | Synchronization failed, with the reason. A failure while scanning (unreadable file, unmounted destination) changes nothing, and the status is saved only after a successful run |
+| 👋 | gsynchro is stopping |
+
+**Using the log when something does not work:**
+
+- *A change in Drive never arrives.* If no `👀 [drive]` line appears, the mount has not reported the file yet: the problem lies before gsynchro, in the Drive client or rclone cache. The 60-second fallback scan (below) may still pick it up; you will then see `♻️ syncing ...` without a preceding event.
+- *Events appear but nothing is applied.* Check that the path matches `items` and `extensions`; run with `--debug` to see filter decisions.
+- *The same file keeps being synchronized.* Repeated `👀` lines for a file you are not editing mean that something keeps rewriting it, for example an editor, a formatter, or another gsynchro instance working on the same folders.
+- *Synchronization feels slow.* Compare the event timestamp with `♻️ syncing ...` (waiting: lower `debounce`) and with the result line (work: large files or a slow mount).
+
 Debug output includes timestamps and filesystem events, filter decisions, debounce activity, and the reconciliation plan. The watcher uses polling for the destination directory to improve change detection on mounted filesystems. As a fallback when a mount does not emit a filesystem event, gsynchro compares tracked file paths, sizes, and modification times every 60 seconds and synchronizes detected changes. Remote changes become visible according to the mount client's cache behavior; `gsynchro` cannot detect a remote change before the mounted filesystem reports it.
 
 ## Synchronization behavior

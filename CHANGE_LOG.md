@@ -2,6 +2,17 @@
 
 Newest first. Entries are added by `npm run release` from CURRENT_CHANGE.md.
 
+## v0.3.0 — Clearer console log: renames and no echo events
+
+_2026-10-04_
+
+- A rename within the same folder is reported as `✍️ [side] file:<path> RENAMED old name: <name>` instead of a move between identical folders; a file moved and renamed at once shows both full paths.
+
+- Echoes of gsynchro's own writes (a copy, a rename, a trashed file, a Markdown identity footprint) are no longer shown as `👀` events. They still trigger one confirming synchronization (`💤 nothing to do`), and remain visible with `--debug`.
+- A blank line separates the end of a synchronization from the next events.
+
+The README explains how to read the console log: raw events versus interpreted operations, echoes, delays, and an icon legend.
+
 ## v0.2.2 — Change log in reverse chronological order
 
 _2026-10-04_

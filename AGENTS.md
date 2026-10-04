@@ -36,6 +36,7 @@ Run `npm run typecheck` and `npm test` before considering a change done.
 | `src/status.ts` | Status files, history, machine id, `.gsynchro/.gitignore` |
 | `src/sync.ts` | One complete reconciliation (`synchronize`) and startup checks |
 | `src/service.ts` | `SyncService`: chokidar watchers, debounce, fallback scan, serialization |
+| `src/echo.ts` | Recognizes watcher events caused by gsynchro's own writes |
 | `src/setup.ts` | Interactive setup wizard |
 | `src/report.ts` | Console reporting of operations and warnings |
 
@@ -46,7 +47,8 @@ There is no module-level mutable state: everything receives a `SyncContext`. Kee
 - `test/plan.test.ts`: decision table for `buildSyncPlan` and move detection.
 - `test/units.test.ts`: path filters, configuration, Markdown footprint.
 - `test/sync.test.ts`: integration tests. `createFixture()` in `test/helpers.ts` creates `repo/` and `drive/` in a temporary directory and runs `synchronize()` on them with a silent logger.
-- `test/service.test.ts`: the watcher service end to end.
+- `test/echo.test.ts`: echo recognition.
+- `test/service.test.ts`: the watcher service end to end, including that echoes are not shown and lead to exactly one confirming synchronization.
 
 `npm test` writes the full console output of every synchronization run by the tests to `test-results/console.log`, in order, with a header per test file and per test. Temporary paths appear as `<tmp>`. The test runner's report goes to `test-results/report.txt`. Set `GSYNCHRO_TEST_DEBUG=1` to include the `--debug` lines. The console output is part of the product: read this log when changing what gsynchro prints.
 
@@ -74,4 +76,5 @@ Every behaviour change or bug fix needs a test, preferably an integration test u
 - ESM with `.js` extensions in relative imports (`NodeNext`), strict TypeScript.
 - Dependencies are kept minimal (chokidar, fast-glob, yaml, picocolors). Ask before adding one.
 - Code, comments and documentation are in English.
+- The log intentionally shows raw watcher events (👀) next to the interpreted operations, with millisecond timestamps to measure delays. Do not merge or hide real events. Only echoes of gsynchro's own writes are not shown (`src/echo.ts`: the file already matches the saved status). They still trigger the confirming "nothing to do" synchronization and remain visible with `--debug`. The rationale is in README "Reading the console log".
 - Console output goes through the `Logger` of the context, never `console.*` directly (except `--help`/`--version` and the interactive setup wizard). The logger prefixes every line with `HH:MM:ss.fff`; `emojiText()` puts a tab after the emoji so text lines up whatever width the terminal gives the emoji; colors come from `paint()` in `src/output.ts` (picocolors) and are off when output is not a TTY, with `NO_COLOR`, or with `--no-color`.

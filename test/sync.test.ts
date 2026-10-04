@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdir, readdir, rm, symlink } from 'node:fs/promises';
+import { chmod, mkdir, readdir, rename, rm, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 
@@ -389,6 +389,30 @@ describe('console output', () => {
       ['♻️\tsyncing ...', '💤\tnothing to do (N ms)'],
     );
   });
+
+  /* Renames, moves and both, done on the destination like a Drive user would. */
+  const relocations: Array<[string, string, string, string]> = [
+    ['rename', 'tasks/A.md', 'tasks/B.md', '✍️\t[drive] file:tasks/B.md RENAMED old name: A.md'],
+    ['move', 'tasks/todo/A.md', 'tasks/done/A.md', '➡️\t[drive] file:A.md MOVED tasks/todo -> tasks/done'],
+    ['move and rename', 'tasks/todo/A.md', 'tasks/done/B.md', '➡️\t[drive] file:tasks/done/B.md MOVED from: tasks/todo/A.md'],
+  ];
+
+  for (const [name, from, to, expected] of relocations) {
+    test(`a ${name}`, async () => {
+      await fx.write('repo', from, '# A\n');
+      await fx.sync();
+      await mkdir(path.dirname(path.join(fx.root('drive'), to)), { recursive: true });
+      await rename(path.join(fx.root('drive'), from), path.join(fx.root('drive'), to));
+      const before = fx.output.length;
+
+      const result = await fx.sync();
+
+      assert.deepEqual(result.operations.map((op) => op.type), ['move']);
+      assert.ok(fx.output.slice(before).includes(expected), fx.output.slice(before).join('\n'));
+      assert.ok(await fx.exists('repo', to));
+      assert.equal(await fx.exists('repo', from), false);
+    });
+  }
 
   test('a failed synchronization', async () => {
     await rm(fx.root('drive'), { recursive: true });

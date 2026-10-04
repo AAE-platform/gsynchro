@@ -46,3 +46,42 @@ test('stop() waits for the running reconciliation', async (t) => {
   assert.equal((await running).result, 'completed');
   assert.ok(await fx.exists('drive', 'a.txt'));
 });
+
+test("gsynchro's own writes are not shown, only confirmed by one more synchronization", async (t) => {
+  /*
+   * A debounce longer than the watcher's write-settling time (500 ms) plus
+   * the destination polling (1 s), as with the 3 s default: all events of
+   * a change arrive before the synchronization that applies it.
+   */
+  fx = await createFixture(t.fullName, { debounce: 2 });
+  const results: SyncResult[] = [];
+  service = new SyncService(fx.ctx, {
+    fallbackScanIntervalMs: 0,
+    onSync: (result) => results.push(result),
+  });
+
+  await service.reconcileNow();
+  service.start();
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  await fx.write('drive', 'docs/note.md', '# Note\n');
+  await waitFor(async () => results.some((result) => result.result === 'completed'), 15_000);
+  assert.ok(await fx.exists('repo', 'docs/note.md'));
+  const syncsAfterCopy = results.length;
+
+  /* Long enough for any echo to arrive and its synchronization to run. */
+  await new Promise((resolve) => setTimeout(resolve, 4500));
+
+  /* The event follows the startup block after a blank line. */
+  const eventIndex = fx.output.findIndex((line) => line.startsWith('👀'));
+  assert.equal(fx.output[eventIndex - 1], '');
+  assert.match(fx.output[eventIndex - 2]!, /^💤/);
+
+  const events = fx.output.filter((line) => line.startsWith('👀'));
+  assert.deepEqual(events, ['👀\t[drive] file:docs/note.md ADD']);
+  /* The echoes trigger exactly one confirming synchronization. */
+  assert.deepEqual(
+    results.slice(syncsAfterCopy).map((result) => result.result),
+    ['up-to-date'],
+  );
+});

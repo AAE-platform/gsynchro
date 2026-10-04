@@ -2,6 +2,7 @@ import chokidar, { type FSWatcher } from 'chokidar';
 import path from 'node:path';
 
 import { FALLBACK_SCAN_INTERVAL_MS } from './constants.js';
+import { isEchoEvent } from './echo.js';
 import { sideRoot, statusPath } from './layout.js';
 import { emojiText, sideLabel } from './output.js';
 import {
@@ -35,7 +36,11 @@ export class SyncService {
   private fallbackScanRunning = false;
   private reconcilePending = false;
   private inFlight: Promise<SyncResult> | undefined;
+  /* Raw events are classified one at a time, in arrival order. */
+  private classification: Promise<void> = Promise.resolve();
   private stopped = false;
+  /* A blank line separates a synchronization block from the next events. */
+  private separateNextEvent = false;
 
   constructor(
     private readonly ctx: SyncContext,
@@ -59,6 +64,7 @@ export class SyncService {
     this.inFlight = synchronize(this.ctx, events);
     try {
       const result = await this.inFlight;
+      this.separateNextEvent = true;
       this.options.onSync?.(result);
       return result;
     } finally {
@@ -98,6 +104,7 @@ export class SyncService {
 
     await Promise.all(this.watchers.map((watcher) => watcher.close()));
     this.watchers = [];
+    await this.classification;
     await this.inFlight;
   }
 
@@ -120,6 +127,43 @@ export class SyncService {
       return;
     }
 
+    /* Fallback-scan findings are compared with the status already. */
+    if (type === 'poll') {
+      this.enqueue(side, type, relativePath);
+      return;
+    }
+
+    this.classification = this.classification.then(
+      () => this.enqueueEvent(side, type, relativePath),
+    );
+  }
+
+  /*
+   * An event observed during a synchronization may be that run's own
+   * write: decide only once it has finished and saved the new state.
+   *
+   * An echo is not shown — it is an obvious consequence of the operation
+   * just printed — but it still triggers a synchronization, whose
+   * "nothing to do" confirms that both sides have converged.
+   */
+  private async enqueueEvent(side: Side, type: string, relativePath: string): Promise<void> {
+    while (this.inFlight) {
+      await this.inFlight;
+    }
+
+    if (this.stopped) {
+      return;
+    }
+
+    const echo = await isEchoEvent(this.ctx, side, type, relativePath);
+    if (echo) {
+      this.ctx.log.debug(`ECHO ${side.toUpperCase()} not shown: ${type} ${relativePath} matches the saved state`);
+    }
+
+    this.enqueue(side, type, relativePath, echo);
+  }
+
+  private enqueue(side: Side, type: string, relativePath: string, echo = false): void {
     this.eventQueue.push({
       side,
       type,
@@ -127,7 +171,11 @@ export class SyncService {
       timestamp: Date.now(),
     });
 
-    if (type !== 'poll' && !type.endsWith('Dir')) {
+    if (!echo && type !== 'poll' && !type.endsWith('Dir')) {
+      if (this.separateNextEvent) {
+        this.separateNextEvent = false;
+        this.ctx.log.info('');
+      }
       this.ctx.log.info(
         emojiText('👀', `[${sideLabel(side)}] file:${relativePath} ${type.toUpperCase()}`),
       );

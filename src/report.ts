@@ -32,13 +32,29 @@ export function printCompletedOperations(
     }
 
     if (operation.type === 'move') {
-      log.info(
-        emojiText(
+      const side = `[${sideLabel(operation.from)}]`;
+      const previousDirectory = path.posix.dirname(operation.previousPath);
+      const directory = path.posix.dirname(operation.path);
+      const previousName = path.posix.basename(operation.previousPath);
+      const name = path.posix.basename(operation.path);
+
+      if (previousDirectory === directory) {
+        log.info(emojiText(
+          '✍️',
+          `${side} file:${operation.path} ${paint('RENAMED', 'bold')} old name: ${previousName}`,
+        ));
+      } else if (previousName === name) {
+        log.info(emojiText(
           '➡️',
-          `[${sideLabel(operation.from)}] file:${path.basename(operation.path)} ` +
-          `${paint('MOVED', 'bold')} ${path.dirname(operation.previousPath)} -> ${path.dirname(operation.path)}`,
-        ),
-      );
+          `${side} file:${name} ${paint('MOVED', 'bold')} ${previousDirectory} -> ${directory}`,
+        ));
+      } else {
+        /* Moved and renamed at once: show both full paths. */
+        log.info(emojiText(
+          '➡️',
+          `${side} file:${operation.path} ${paint('MOVED', 'bold')} from: ${operation.previousPath}`,
+        ));
+      }
       continue;
     }
 
