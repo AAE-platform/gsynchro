@@ -1600,6 +1600,7 @@ async function collectCandidates(
 async function scanSide(
   side: Side,
   preferredIdentities: ReadonlyMap<string, string> = new Map(),
+  knownSnapshots: ReadonlyMap<string, FileSnapshot> = new Map(),
 ): Promise<{
   snapshots: Map<string, FileSnapshot>;
   skipped: Array<{ side: Side; relativePath: string; size: number }>;
@@ -1616,6 +1617,22 @@ async function scanSide(
   const identities = new Map<string, string[]>();
 
   for (const file of files) {
+    const known = knownSnapshots.get(file.relativePath);
+    const canReuseKnownSnapshot = known &&
+      known.size === file.size &&
+      known.mtimeMs === file.mtimeMs &&
+      (!isMarkdownPath(file.relativePath) || Boolean(known.identity));
+
+    if (canReuseKnownSnapshot) {
+      result.set(file.relativePath, known);
+      if (known.identity) {
+        const paths = identities.get(known.identity) ?? [];
+        paths.push(file.relativePath);
+        identities.set(known.identity, paths);
+      }
+      continue;
+    }
+
     let registration: Awaited<ReturnType<typeof ensureMarkdownIdentity>>;
     let hash: string;
 
@@ -1662,20 +1679,49 @@ async function scanSide(
   };
 }
 
-async function scanCurrentState(): Promise<CurrentState> {
+function snapshotsFromStatus(
+  status: StatusFile | undefined,
+  side: Side,
+): Map<string, FileSnapshot> {
+  const snapshots = new Map<string, FileSnapshot>();
+  if (!status) {
+    return snapshots;
+  }
+
+  for (const [relativePath, entry] of Object.entries(status.files)) {
+    const snapshot = side === 'repo' ? entry.repo : entry.drive;
+    if (snapshot) {
+      snapshots.set(relativePath, snapshot);
+    }
+  }
+
+  return snapshots;
+}
+
+async function scanCurrentState(
+  knownStatus?: StatusFile,
+): Promise<CurrentState> {
   /*
    * Validate both roots BEFORE interpreting any absence as a delete.
    */
   await validateRoots();
 
-  const repoScan = await scanSide('repo');
+  const repoScan = await scanSide(
+    'repo',
+    new Map(),
+    snapshotsFromStatus(knownStatus, 'repo'),
+  );
   const repoIdentities = new Map<string, string>();
   for (const [relativePath, snapshot] of repoScan.snapshots) {
     if (snapshot.identity) {
       repoIdentities.set(relativePath, snapshot.identity);
     }
   }
-  const driveScan = await scanSide('drive', repoIdentities);
+  const driveScan = await scanSide(
+    'drive',
+    repoIdentities,
+    snapshotsFromStatus(knownStatus, 'drive'),
+  );
 
   return {
     repo: repoScan.snapshots,
@@ -2284,7 +2330,7 @@ async function reconcile(): Promise<void> {
      * If this scan fails, no filesystem operation and no status write occur.
      */
     const before =
-      await scanCurrentState();
+      await scanCurrentState(previousStatus);
 
     const plan = buildSyncPlan(
       previousStatus,
@@ -2330,7 +2376,7 @@ async function reconcile(): Promise<void> {
      * Do not trust the intended result: observe the filesystems again.
      */
     const after =
-      await scanCurrentState();
+      await scanCurrentState(previousStatus);
 
     const verificationPlan =
       buildSyncPlan(
