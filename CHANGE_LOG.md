@@ -1,8 +1,18 @@
 # Change log
 
-Entries are appended by `npm run release` from CURRENT_CHANGE.md.
+Newest first. Entries are added by `npm run release` from CURRENT_CHANGE.md.
 
-Versions up to v0.1.36 predate this log; see the Git history and tags.
+## v0.2.2 — Change log in reverse chronological order
+
+_2026-10-04_
+
+`CHANGE_LOG.md` now lists the newest release first; `npm run release` adds each new entry at the top.
+
+## v0.2.1 — Aligned console output with millisecond timestamps
+
+_2026-10-04_
+
+Console lines now start with the time including milliseconds (`HH:MM:ss.fff`), shown fainter. A tab instead of two spaces separates the icon from the text, so the text lines up after every icon: terminals disagree on the width of icons such as ♻️ and ➡️, but not on where a tab goes.
 
 ## v0.2.0 — Modular sync engine, test suite and safer reconciliation
 
@@ -25,8 +35,6 @@ Fixes:
 
 Release tooling: `npm run release` now reads this file, appends it to `CHANGE_LOG.md`, bumps the version, commits all pending changes as `[published] vX.Y.Z <title>`, tags, pushes and publishes. `prepublishOnly` also runs the tests. Added `AGENTS.md` for coding agents.
 
-## v0.2.1 — Aligned console output with millisecond timestamps
+## v0.1.36 and earlier
 
-_2026-10-04_
-
-Console lines now start with the time including milliseconds (`HH:MM:ss.fff`), shown fainter. A tab instead of two spaces separates the icon from the text, so the text lines up after every icon: terminals disagree on the width of icons such as ♻️ and ➡️, but not on where a tab goes.
+These versions predate this log; see the Git history and tags.

@@ -596,7 +596,7 @@ Use `minor` or `major` instead of `patch` when appropriate. The release script:
 1. reads the title and description from `CURRENT_CHANGE.md`, and refuses to continue if the title is empty;
 2. checks that the branch has a Git upstream, checks npm authentication (starting interactive `npm login` if needed), and runs the typecheck and tests;
 3. shows the new version, the commit message, and every pending file, then asks for confirmation;
-4. bumps the version, appends the change to `CHANGE_LOG.md`, and resets `CURRENT_CHANGE.md`;
+4. bumps the version, adds the change at the top of `CHANGE_LOG.md` (newest first), and resets `CURRENT_CHANGE.md`;
 5. commits **all pending changes** as `[published] vX.Y.Z <title>`, creates the `vX.Y.Z` tag, and pushes both;
 6. publishes to npm.
 

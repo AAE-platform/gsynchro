@@ -6,7 +6,7 @@
  *   1. read the title and description of the change from CURRENT_CHANGE.md
  *   2. check git upstream and npm authentication, run typecheck and tests
  *   3. bump the version (package.json + package-lock.json)
- *   4. append the change to CHANGE_LOG.md and reset CURRENT_CHANGE.md
+ *   4. add the change at the top of CHANGE_LOG.md and reset CURRENT_CHANGE.md
  *   5. commit every pending change as "[published] vX.Y.Z <title>",
  *      tag vX.Y.Z and push both
  *   6. npm publish
@@ -36,7 +36,7 @@ description goes below this comment. Keep it updated while developing:
 
 const CHANGE_LOG_HEADER = `# Change log
 
-Entries are appended by \`npm run release\` from CURRENT_CHANGE.md.
+Newest first. Entries are added by \`npm run release\` from CURRENT_CHANGE.md.
 `;
 
 const releaseType = process.argv[2] ?? 'patch';
@@ -94,6 +94,15 @@ function bumpVersion(version, type) {
     : type === 'minor'
       ? `${major}.${minor + 1}.0`
       : `${major}.${minor}.${patch + 1}`;
+}
+
+/** Newest first: the entry goes before the first "## " heading, or at the end. */
+function insertNewestEntry(changeLog, entry) {
+  const firstEntry = changeLog.search(/^## /m);
+  if (firstEntry === -1) {
+    return `${changeLog.trimEnd()}\n\n${entry}`;
+  }
+  return `${changeLog.slice(0, firstEntry)}${entry}\n${changeLog.slice(firstEntry)}`;
 }
 
 function today() {
@@ -203,10 +212,10 @@ try {
 
   const changeLog = (await readOptional(CHANGE_LOG)) ?? CHANGE_LOG_HEADER;
   const entry =
-    `\n## v${version} — ${title}\n\n` +
+    `## v${version} — ${title}\n\n` +
     `_${today()}_\n` +
     (description ? `\n${description}\n` : '');
-  await writeFile(CHANGE_LOG, `${changeLog.trimEnd()}\n${entry}`, 'utf8');
+  await writeFile(CHANGE_LOG, insertNewestEntry(changeLog, entry), 'utf8');
   await writeFile(CURRENT_CHANGE, CURRENT_CHANGE_TEMPLATE, 'utf8');
 
   run('git', ['add', '--all']);
