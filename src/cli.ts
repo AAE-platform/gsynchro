@@ -106,7 +106,7 @@ type SyncOperation =
     };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const FALLBACK_SCAN_INTERVAL_MS = 10_000;
+const FALLBACK_SCAN_INTERVAL_MS = 60_000;
 const SYNCHRONIZATION_NOTICE_FILENAME = 'GSYNCHRO.md';
 const SYNCHRONIZATION_NOTICE_MARKER = '<!-- gsynchro synchronization notice: v1 -->';
 const CONFIG_MIRROR_FILENAME = 'gsynchro.yml';
@@ -288,6 +288,13 @@ function debug(message: string, details?: unknown): void {
   if (DEBUG) {
     console.log(`[gsynchro DEBUG ${new Date().toISOString()}] ${message}`, details ?? '');
   }
+}
+
+function formatElapsed(startedAt: bigint): string {
+  const elapsedMs = Number((process.hrtime.bigint() - startedAt) / 1_000_000n);
+  return elapsedMs < 1_000
+    ? `${elapsedMs} ms`
+    : `${(elapsedMs / 1_000).toFixed(1)} s`;
 }
 
 function normalizeRelative(filePath: string): string {
@@ -2291,6 +2298,7 @@ async function reconcile(): Promise<void> {
   }
 
   reconcileRunning = true;
+  const reconciliationStartedAt = process.hrtime.bigint();
 
   const events = eventQueue;
   eventQueue = [];
@@ -2311,15 +2319,6 @@ async function reconcile(): Promise<void> {
     console.log(
       `${label('🔄', 'Syncing', 'cyan')} ${paint(new Date().toLocaleTimeString(), 'dim')}`,
     );
-
-    if (events.length > 0) {
-      for (const event of events) {
-        console.log(
-          `  ${label('👀', 'Changed', 'blue')} ${sideLabel(event.side)} ` +
-          `${event.type} ${event.path}`,
-        );
-      }
-    }
 
     const previousStatus =
       await loadStatus();
@@ -2362,7 +2361,8 @@ async function reconcile(): Promise<void> {
 
       printFinalStateWarnings(before);
       console.log(
-        `${label('✅', 'Up to date', 'green')} repo and drive already match`,
+        `${label('✅', 'Up to date', 'green')} repo and drive already match ` +
+        `(${formatElapsed(reconciliationStartedAt)})`,
       );
 
       return;
@@ -2418,7 +2418,7 @@ async function reconcile(): Promise<void> {
     console.log(
       `${label('✅', 'Sync complete', 'green')} ${plan.length} operation${
         plan.length === 1 ? '' : 's'
-      } applied`,
+      } applied (${formatElapsed(reconciliationStartedAt)})`,
     );
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -2445,7 +2445,7 @@ async function reconcile(): Promise<void> {
       /* Preserve the original synchronization error. */
     }
     console.error(
-      `${label('❌', 'Sync failed', 'red')}:`,
+      `${label('❌', 'Sync failed', 'red')} (${formatElapsed(reconciliationStartedAt)}):`,
       detail,
     );
   } finally {
@@ -2492,6 +2492,15 @@ function queueEvent(
     path: relativePath,
     timestamp: Date.now(),
   });
+
+  if (type !== 'poll' && !type.endsWith('Dir')) {
+    console.log(
+      emojiText(
+        '👀',
+        `[${sideLabel(side)}] file:${relativePath} ${type.toUpperCase()}`,
+      ),
+    );
+  }
 
   debug(`QUEUE ${side.toUpperCase()} ${type} ${relativePath}`, { pendingEvents: eventQueue.length });
   scheduleReconcile();
