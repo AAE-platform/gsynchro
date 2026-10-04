@@ -72,6 +72,14 @@ interface FsEvent {
 interface CurrentState {
   repo: Map<string, FileSnapshot>;
   drive: Map<string, FileSnapshot>;
+  skipped: Array<{ side: Side; relativePath: string; size: number }>;
+  duplicateIdentities: DuplicateIdentity[];
+}
+
+interface DuplicateIdentity {
+  side: Side;
+  identity: string;
+  paths: string[];
 }
 
 type SyncOperation =
@@ -1540,20 +1548,17 @@ async function collectCandidates(
 async function scanSide(
   side: Side,
   preferredIdentities: ReadonlyMap<string, string> = new Map(),
-): Promise<Map<string, FileSnapshot>> {
+): Promise<{
+  snapshots: Map<string, FileSnapshot>;
+  skipped: Array<{ side: Side; relativePath: string; size: number }>;
+  duplicateIdentities: DuplicateIdentity[];
+}> {
   const root = sideRoot(side);
   const { files, oversized } = await collectCandidates(
     root,
     config.items,
     new Set(config.extensions),
   );
-
-  for (const item of oversized) {
-    console.warn(
-      `${label('⏭️', 'Skipped', 'yellow')} ${sideLabel(side)} ${item.relativePath} ` +
-      `(${(item.size / 1024 / 1024).toFixed(2)} MiB > 10 MiB)`,
-    );
-  }
 
   const result = new Map<string, FileSnapshot>();
   const identities = new Map<string, string[]>();
@@ -1596,16 +1601,13 @@ async function scanSide(
     }
   }
 
-  for (const [identity, paths] of identities) {
-    if (paths.length > 1) {
-      console.warn(
-        `${label('⚠️', 'duplicate detected', 'yellow')} on ${sideLabel(side)} file id:${identity.slice(0, 8)}\n` +
-        paths.map((relativePath) => `  - ${relativePath}`).join('\n'),
-      );
-    }
-  }
-
-  return result;
+  return {
+    snapshots: result,
+    skipped: oversized.map((item) => ({ side, ...item })),
+    duplicateIdentities: [...identities]
+      .filter(([, paths]) => paths.length > 1)
+      .map(([identity, paths]) => ({ side, identity, paths })),
+  };
 }
 
 async function scanCurrentState(): Promise<CurrentState> {
@@ -1614,18 +1616,23 @@ async function scanCurrentState(): Promise<CurrentState> {
    */
   await validateRoots();
 
-  const repo = await scanSide('repo');
+  const repoScan = await scanSide('repo');
   const repoIdentities = new Map<string, string>();
-  for (const [relativePath, snapshot] of repo) {
+  for (const [relativePath, snapshot] of repoScan.snapshots) {
     if (snapshot.identity) {
       repoIdentities.set(relativePath, snapshot.identity);
     }
   }
-  const drive = await scanSide('drive', repoIdentities);
+  const driveScan = await scanSide('drive', repoIdentities);
 
   return {
-    repo,
-    drive,
+    repo: repoScan.snapshots,
+    drive: driveScan.snapshots,
+    skipped: [...repoScan.skipped, ...driveScan.skipped],
+    duplicateIdentities: [
+      ...repoScan.duplicateIdentities,
+      ...driveScan.duplicateIdentities,
+    ],
   };
 }
 
@@ -1936,19 +1943,6 @@ async function executePlan(
 ): Promise<void> {
   for (const operation of operations) {
     if (operation.type === 'copy') {
-      if (
-        operation.reason.includes('conflict')
-      ) {
-        console.warn(
-          `${label('⚠️', 'Conflict', 'yellow')} ${operation.path} — repo wins`,
-        );
-      }
-
-      console.log(
-        `${label('➡️', 'Sync', 'cyan')} ${sideLabel(operation.from)} -> ${sideLabel(operation.to)} ` +
-        `${operation.path} (${compactOperationReason(operation.reason)})`,
-      );
-
       await copyBetweenSides(
         operation.from,
         operation.to,
@@ -1958,14 +1952,48 @@ async function executePlan(
       continue;
     }
 
+    await moveToTrash(
+      operation.side,
+      operation.path,
+    );
+  }
+}
+
+function printCompletedOperations(operations: SyncOperation[]): void {
+  for (const operation of operations) {
+    if (operation.type === 'copy') {
+      if (operation.reason.includes('conflict')) {
+        console.warn(
+          `${label('⚠️', 'Conflict', 'yellow')} ${operation.path} — repo wins`,
+        );
+      }
+
+      console.log(
+        `${label('➡️', 'Sync', 'cyan')} ${sideLabel(operation.from)} -> ${sideLabel(operation.to)} ` +
+        `${operation.path} (${compactOperationReason(operation.reason)})`,
+      );
+      continue;
+    }
+
     console.log(
       `${label('🗑️', 'Trash', 'yellow')} ${sideLabel(operation.side)} ${operation.path} ` +
       `(${compactOperationReason(operation.reason)})`,
     );
+  }
+}
 
-    await moveToTrash(
-      operation.side,
-      operation.path,
+function printFinalStateWarnings(current: CurrentState): void {
+  for (const item of current.skipped) {
+    console.warn(
+      `${label('⏭️', 'Skipped', 'yellow')} ${sideLabel(item.side)} ${item.relativePath} ` +
+      `(${(item.size / 1024 / 1024).toFixed(2)} MiB > 10 MiB)`,
+    );
+  }
+
+  for (const duplicate of current.duplicateIdentities) {
+    console.warn(
+      `${label('⚠️', 'duplicate detected', 'yellow')} on ${sideLabel(duplicate.side)} file id:${duplicate.identity.slice(0, 8)}\n` +
+      duplicate.paths.map((relativePath) => `  - ${relativePath}`).join('\n'),
     );
   }
 }
@@ -2124,6 +2152,7 @@ async function reconcile(): Promise<void> {
         history: [...(previousDriveStatus.history ?? []), ...(driveStatus.history ?? [])].slice(-50),
       });
 
+      printFinalStateWarnings(before);
       console.log(
         `${label('✅', 'Up to date', 'green')} repo and drive already match`,
       );
@@ -2176,6 +2205,8 @@ async function reconcile(): Promise<void> {
       history: [...(previousDriveStatus.history ?? []), ...(driveStatus.history ?? [])].slice(-50),
     });
 
+    printCompletedOperations(plan);
+    printFinalStateWarnings(after);
     console.log(
       `${label('✅', 'Sync complete', 'green')} ${plan.length} operation${
         plan.length === 1 ? '' : 's'
