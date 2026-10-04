@@ -1365,7 +1365,6 @@ async function saveStatusFile(
   await mkdir(path.dirname(statusPath), { recursive: true });
   const tmpPath = `${statusPath}.tmp-${process.pid}`;
 
-  console.log(`[gsynchro] writing status ${statusPath}`);
   await writeFile(
     tmpPath,
     `${JSON.stringify(statusFile, null, 2)}\n`,
@@ -1373,6 +1372,15 @@ async function saveStatusFile(
   );
 
   await rename(tmpPath, statusPath);
+
+  const side: Side | undefined = path.resolve(statusPath) === path.resolve(STATUS_PATH)
+    ? 'repo'
+    : DRIVE_ROOT && path.resolve(statusPath) === path.resolve(DRIVE_ROOT, '.gsynchro', 'gsynchro.status')
+      ? 'drive'
+      : undefined;
+  if (side) {
+    console.log(emojiText('♻️', `[${sideLabel(side)}] status updated`));
+  }
 }
 
 function withStatusHistory(
