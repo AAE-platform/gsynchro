@@ -106,6 +106,7 @@ type SyncOperation =
     };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const FALLBACK_SCAN_INTERVAL_MS = 10_000;
 const SYNCHRONIZATION_NOTICE_FILENAME = 'GSYNCHRO.md';
 const SYNCHRONIZATION_NOTICE_MARKER = '<!-- gsynchro synchronization notice: v1 -->';
 const CONFIG_MIRROR_FILENAME = 'gsynchro.yml';
@@ -220,6 +221,8 @@ let repoWatcher: FSWatcher | undefined;
 let driveWatcher: FSWatcher | undefined;
 
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+let fallbackScanTimer: ReturnType<typeof setInterval> | undefined;
+let fallbackScanRunning = false;
 let reconcileRunning = false;
 let reconcilePending = false;
 
@@ -2436,6 +2439,9 @@ function scheduleReconcile(): void {
   if (debounceTimer) {
     clearTimeout(debounceTimer);
   }
+  if (fallbackScanTimer) {
+    clearInterval(fallbackScanTimer);
+  }
 
   debounceTimer = setTimeout(() => {
     debounceTimer = undefined;
@@ -2448,6 +2454,61 @@ function scheduleReconcile(): void {
 
     void reconcile();
   }, (config.debounce ?? 3) * 1000);
+}
+
+async function queueUnobservedChanges(): Promise<void> {
+  if (fallbackScanRunning || reconcileRunning || debounceTimer) {
+    return;
+  }
+
+  fallbackScanRunning = true;
+
+  try {
+    const status = await loadStatus();
+    const extensions = new Set(config.extensions);
+
+    for (const side of ['repo', 'drive'] as const) {
+      const { files } = await collectCandidates(
+        sideRoot(side),
+        config.items,
+        extensions,
+      );
+      const current = new Map(files.map((file) => [file.relativePath, file]));
+      const previous = new Map<string, FileSnapshot>();
+
+      for (const [relativePath, entry] of Object.entries(status.files)) {
+        const snapshot = side === 'repo' ? entry.repo : entry.drive;
+        if (snapshot) {
+          previous.set(relativePath, snapshot);
+        }
+      }
+
+      for (const [relativePath, file] of current) {
+        const snapshot = previous.get(relativePath);
+        if (!snapshot || snapshot.size !== file.size || snapshot.mtimeMs !== file.mtimeMs) {
+          debug(`FALLBACK ${side.toUpperCase()} detected: ${relativePath}`);
+          queueEvent(side, 'poll', relativePath);
+        }
+      }
+
+      for (const relativePath of previous.keys()) {
+        if (!current.has(relativePath)) {
+          debug(`FALLBACK ${side.toUpperCase()} detected removal: ${relativePath}`);
+          queueEvent(side, 'poll', relativePath);
+        }
+      }
+    }
+  } catch (error) {
+    debug('FALLBACK scan failed', error);
+  } finally {
+    fallbackScanRunning = false;
+  }
+}
+
+function startFallbackScan(): void {
+  fallbackScanTimer = setInterval(() => {
+    void queueUnobservedChanges();
+  }, FALLBACK_SCAN_INTERVAL_MS);
 }
 
 function createWatcher(
@@ -2637,6 +2698,8 @@ async function main(): Promise<void> {
 
   driveWatcher =
     createWatcher('drive');
+
+  startFallbackScan();
 
   console.log(
     `${label('👀', 'Watching', 'green')} repo and drive for changes`,
