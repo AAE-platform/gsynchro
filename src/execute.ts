@@ -8,7 +8,6 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 
-import { MAX_FILE_SIZE } from './constants.js';
 import { hashFile, shortHash } from './identity.js';
 import { sideRoot, trashRoot } from './layout.js';
 import type { Side, SyncContext, SyncOperation } from './types.js';
@@ -48,9 +47,9 @@ export async function copyBetweenSides(
     );
   }
 
-  if (sourceInfo.size > MAX_FILE_SIZE) {
+  if (sourceInfo.size > ctx.config.maxFileSizeMiB * 1024 * 1024) {
     throw new Error(
-      `Source became larger than 10 MiB: ${sourcePath}`,
+      `Source became larger than ${ctx.config.maxFileSizeMiB} MiB: ${sourcePath}`,
     );
   }
 

@@ -6,6 +6,7 @@ import {
   CONFIG_MIRROR_MARKER,
   DEFAULT_DEBOUNCE_SECONDS,
   DEFAULT_EXTENSIONS,
+  DEFAULT_MAX_FILE_SIZE_MIB,
 } from './constants.js';
 import {
   isPathInside,
@@ -57,6 +58,19 @@ export function parseConfig(raw: string, baseDirectory: string): Config {
   }
 
   if (
+    parsed.maxFileSizeMiB !== undefined &&
+    (
+      typeof parsed.maxFileSizeMiB !== 'number' ||
+      !Number.isFinite(parsed.maxFileSizeMiB) ||
+      parsed.maxFileSizeMiB <= 0
+    )
+  ) {
+    throw new Error(
+      'gsynchro.yml: "maxFileSizeMiB" must be > 0',
+    );
+  }
+
+  if (
     parsed.extensions !== undefined &&
     (
       !Array.isArray(parsed.extensions) ||
@@ -89,6 +103,7 @@ export function parseConfig(raw: string, baseDirectory: string): Config {
   return {
     destination: path.resolve(baseDirectory, parsed.destination),
     debounce: parsed.debounce ?? DEFAULT_DEBOUNCE_SECONDS,
+    maxFileSizeMiB: parsed.maxFileSizeMiB ?? DEFAULT_MAX_FILE_SIZE_MIB,
     items: parsed.items.map(normalizeRelative),
     extensions,
   };
@@ -124,6 +139,9 @@ export function renderConfigYaml(cfg: Config): string {
     '\n' +
     '# Seconds of inactivity before reconciling filesystem changes.\n' +
     `debounce: ${cfg.debounce}\n` +
+    '\n' +
+    '# Maximum size of a synchronized file, in MiB.\n' +
+    `maxFileSizeMiB: ${cfg.maxFileSizeMiB}\n` +
     '\n' +
     '# File extensions eligible for synchronization (case-insensitive).\n' +
     'extensions:\n' +

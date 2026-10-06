@@ -91,7 +91,7 @@ async function main(): Promise<void> {
   log.info(`  ${paint('Repo', 'bold')}:  ${ctx.repoRoot}`);
   log.info(`  ${paint('Drive', 'bold')}: ${ctx.driveRoot}`);
   log.info(`  ${paint('Debounce', 'bold')}:    ${config.debounce}s`);
-  log.info(`  ${paint('Max file size', 'bold')}: 10 MiB`);
+  log.info(`  ${paint('Max file size', 'bold')}: ${config.maxFileSizeMiB} MiB`);
   log.info(`  ${paint('Extensions', 'bold')}:  ${config.extensions.join(' ')}`);
   log.info(`  ${paint('Conflicts', 'bold')}:   repo wins`);
   log.debug('Debug enabled; RAW events precede normalized EVENT and QUEUE logs');

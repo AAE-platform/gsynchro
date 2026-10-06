@@ -12,6 +12,7 @@ import {
   DEFAULT_DEBOUNCE_SECONDS,
   DEFAULT_EXTENSIONS,
   DEFAULT_ITEM_SOURCES,
+  DEFAULT_MAX_FILE_SIZE_MIB,
   PREVIEW_SAMPLE_SIZE,
   PREVIEW_WARN_FILE_COUNT,
   PREVIEW_WARN_TOTAL_BYTES,
@@ -96,6 +97,7 @@ async function previewSelection(
   destination: string,
   items: string[],
   extensions: string[],
+  maxFileSizeMiB: number,
   rl: Interface,
 ): Promise<boolean> {
   console.log('\n  Scanning matched files (preview only, nothing is copied)...');
@@ -103,8 +105,8 @@ async function previewSelection(
   const extensionSet = new Set(extensions);
 
   const [repoResult, driveResult] = await Promise.all([
-    collectCandidates(repoRoot, items, extensionSet),
-    collectCandidates(destination, items, extensionSet),
+    collectCandidates(repoRoot, items, extensionSet, maxFileSizeMiB * 1024 * 1024),
+    collectCandidates(destination, items, extensionSet, maxFileSizeMiB * 1024 * 1024),
   ]);
 
   const repoFiles = repoResult.files;
@@ -126,7 +128,7 @@ async function previewSelection(
   const oversizedCount = repoResult.oversized.length + driveResult.oversized.length;
   if (oversizedCount > 0) {
     console.log(
-      `  (${oversizedCount} matching file(s) skipped: larger than 10 MiB)`,
+      `  (${oversizedCount} matching file(s) skipped: larger than ${maxFileSizeMiB} MiB)`,
     );
   }
 
@@ -272,6 +274,22 @@ export async function runSetup(repoRoot: string): Promise<boolean> {
       extensions = [...new Set([...baseExtensions, ...additions])];
     }
 
+    let maxFileSizeMiB: number | undefined;
+
+    while (maxFileSizeMiB === undefined) {
+      const defaultMaxFileSizeMiB = existing?.maxFileSizeMiB ?? DEFAULT_MAX_FILE_SIZE_MIB;
+      const answer = await rl.question(
+        `Maximum file size in MiB [${defaultMaxFileSizeMiB}]: `,
+      );
+      const parsed = Number(answer.trim() || String(defaultMaxFileSizeMiB));
+
+      if (Number.isFinite(parsed) && parsed > 0) {
+        maxFileSizeMiB = parsed;
+      } else {
+        console.log('  Enter a number > 0.');
+      }
+    }
+
     let items: string[] | undefined;
 
     while (items === undefined) {
@@ -310,7 +328,7 @@ export async function runSetup(repoRoot: string): Promise<boolean> {
         ]),
       ];
 
-      if (await previewSelection(repoRoot, destination, selectedItems, extensions, rl)) {
+      if (await previewSelection(repoRoot, destination, selectedItems, extensions, maxFileSizeMiB, rl)) {
         items = selectedItems;
       }
     }
@@ -335,6 +353,7 @@ export async function runSetup(repoRoot: string): Promise<boolean> {
     console.log(`  destination: ${destination}`);
     console.log(`  extensions:  ${extensions.join(', ')}`);
     console.log(`  items:       ${items.join(', ')}`);
+    console.log(`  maxFileSizeMiB: ${maxFileSizeMiB}`);
     console.log(`  debounce:    ${debounce}s`);
     console.log('');
 
@@ -349,7 +368,13 @@ export async function runSetup(repoRoot: string): Promise<boolean> {
       return false;
     }
 
-    const setupConfig: Config = { destination, items, extensions, debounce };
+    const setupConfig: Config = {
+      destination,
+      items,
+      extensions,
+      maxFileSizeMiB,
+      debounce,
+    };
 
     if (await writeSynchronizationNotice(destination, setupConfig)) {
       console.log(`[gsynchro] wrote ${noticePath(destination)}`);

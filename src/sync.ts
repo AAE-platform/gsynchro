@@ -159,7 +159,7 @@ export async function synchronize(
         result: 'up-to-date',
       });
 
-      printFinalStateWarnings(log, before);
+      printFinalStateWarnings(log, before, ctx.config.maxFileSizeMiB);
       log.info(emojiText('💤', `${paint('nothing to do', 'dim')} (${formatElapsed(startedAt)})`));
 
       return { result: 'up-to-date', operations: [] };
@@ -190,7 +190,7 @@ export async function synchronize(
     });
 
     printCompletedOperations(log, plan);
-    printFinalStateWarnings(log, after);
+    printFinalStateWarnings(log, after, ctx.config.maxFileSizeMiB);
     const applied = `${plan.length} operation${plan.length === 1 ? '' : 's'} applied`;
     log.info(emojiText('✅', `${paint(applied, 'bold', 'green')} (${formatElapsed(startedAt)})`));
 

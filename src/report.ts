@@ -72,11 +72,12 @@ export function printCompletedOperations(
 export function printFinalStateWarnings(
   log: Logger,
   current: CurrentState,
+  maxFileSizeMiB: number,
 ): void {
   for (const item of current.skipped) {
     log.warn(
       `${label('⏭️', 'Skipped', 'yellow')} ${sideLabel(item.side)} ${item.relativePath} ` +
-      `(${(item.size / 1024 / 1024).toFixed(2)} MiB > 10 MiB)`,
+      `(${(item.size / 1024 / 1024).toFixed(2)} MiB > ${maxFileSizeMiB} MiB)`,
     );
   }
 

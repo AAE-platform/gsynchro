@@ -100,6 +100,7 @@ describe('configuration', () => {
     assert.deepEqual(config, {
       destination: '/work/drive',
       debounce: 3,
+      maxFileSizeMiB: 10,
       items: ['docs/**/*.*'],
       extensions: DEFAULT_EXTENSIONS,
     });
@@ -116,6 +117,8 @@ describe('configuration', () => {
     ['empty items', 'destination: /d\nitems: []'],
     ['negative debounce', 'destination: /d\nitems: ["*.*"]\ndebounce: -1'],
     ['NaN debounce', 'destination: /d\nitems: ["*.*"]\ndebounce: .nan'],
+    ['zero max file size', 'destination: /d\nitems: ["*.*"]\nmaxFileSizeMiB: 0'],
+    ['negative max file size', 'destination: /d\nitems: ["*.*"]\nmaxFileSizeMiB: -1'],
     ['bad extension', 'destination: /d\nitems: ["*.*"]\nextensions: [".tar.gz"]'],
     ['empty file', ''],
   ];
@@ -130,6 +133,7 @@ describe('configuration', () => {
     const config = {
       destination: '/mnt/drive/project',
       debounce: 5,
+      maxFileSizeMiB: 25,
       items: ['docs/**/*.*', 'tasks/"quoted".md'],
       extensions: ['.md', '.pdf'],
     };

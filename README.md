@@ -222,7 +222,7 @@ The chatbot produces the task content; saving it as a `.md` file in the Drive in
 - Propagates deletions using a saved synchronization state.
 - Resolves simultaneous changes in favor of the project directory.
 - Moves propagated deletions to a local `.trash/` directory where possible.
-- Restricts synchronization to configurable file extensions (default: `.md`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.pdf`) up to 10 MiB.
+- Restricts synchronization to configurable file extensions (default: `.md`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.pdf`) and a configurable maximum file size (default: 10 MiB).
 - Supports glob patterns relative to the project root.
 - Writes a generated `GSYNCHRO.md` notice in the destination root so Drive-side collaborators and AI workspaces can see the configured sync scope.
 
@@ -284,6 +284,9 @@ destination: /home/alex/Drive/projects/my-project
 # Seconds of inactivity before reconciling filesystem changes.
 debounce: 5
 
+# Maximum size of a synchronized file, in MiB.
+maxFileSizeMiB: 10
+
 # File extensions eligible for synchronization (case-insensitive).
 extensions:
   - ".md"
@@ -310,6 +313,7 @@ items:
 | `destination` | Yes | Path to the existing destination directory. Relative paths are resolved from the process working directory; an absolute path is recommended. |
 | `items` | Yes | A non-empty list of glob patterns, relative to the project root, that selects files for synchronization. `*.*` selects eligible files in the project root only. On first setup, the wizard adds that pattern plus only existing directories named `adr`, `decisions`, `docs`, `mockups`, `prompts`, `tasks`, `stack`, `documents`, `documentation`, `milestones`, `governance`, `ai`, `agents`, or `architecture`, each recursively. |
 | `extensions` | No | A non-empty list of file extensions eligible for synchronization, each written with its leading dot (`.md`, not `md`); matching is case-insensitive. Defaults to `.md`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.pdf`. Narrow it (e.g. to just `.md`) or extend it (e.g. add `.docx`, `.csv`, `.json`) to fit what the project's governance actually needs. |
+| `maxFileSizeMiB` | No | Maximum size of an eligible file, in MiB. Defaults to `10`; it must be greater than `0`. The setup wizard asks for this value. |
 | `debounce` | No | Quiet period in seconds before a reconciliation. Defaults to `3`; `0` runs without an additional delay. |
 
 Patterns in `items` are evaluated against both roots, and a file must also have one of the extensions in `extensions` to be eligible. This split is deliberate: once `extensions` says what kinds of files are in scope, `items` can use broader patterns like `docs/**/*.*` instead of repeating the extension in every pattern. For example, `docs/**/*.md` selects Markdown files below `docs/` on both sides, while `docs/**/*.*` selects every file below `docs/` whose extension is currently listed in `extensions`. Files still need to pass the fixed safety rules described below.
@@ -498,7 +502,7 @@ The `[repo]` or `[drive]` tag on an operation names the side where the change or
 | ✍️ `RENAMED` | File renamed in the same folder |
 | ➡️ `MOVED` | File moved to another folder (shows both paths if it was also renamed) |
 | ❎ `DELETED` | File deleted on one side; the other copy was moved to that side's `.trash/` |
-| ⏭️ | File skipped because it is larger than 10 MiB |
+| ⏭️ | File skipped because it is larger than the configured maximum size |
 | ✅ | Synchronization finished, with the number of operations and the duration |
 | 💤 | Synchronization found nothing to do: both sides already match. Expected after each applied synchronization, as confirmation |
 | 💥 | Synchronization failed, with the reason. A failure while scanning (unreadable file, unmounted destination) changes nothing, and the status is saved only after a successful run |
@@ -564,7 +568,7 @@ Keep `.trash/` even when status history is enabled. It can recover a file that g
 The following rules are always applied, regardless of the configured `items` patterns:
 
 - Only files whose extension is listed in `extensions` are eligible (default: `.md`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.pdf`); matching is case-insensitive. Unlike the other rules below, this one is configurable — see [Configuration fields](#configuration-fields).
-- Files larger than 10 MiB are skipped. A file that grows beyond the limit after it was synchronized is left alone on both sides: it is neither copied nor treated as deleted.
+- Files larger than `maxFileSizeMiB` are skipped. A file that grows beyond the configured limit after it was synchronized is left alone on both sides: it is neither copied nor treated as deleted.
 - `.git/`, `node_modules/`, `.gsynchro/`, and `.trash/` directories are excluded.
 - The generated destination-root `GSYNCHRO.md` notice is excluded from ordinary synchronization.
 - Symbolic links are not followed or synchronized.
@@ -600,7 +604,7 @@ Start or repair the filesystem mount and confirm that the configured directory e
 
 ### A file is not synchronized
 
-Check that its path matches an `items` pattern, its extension is listed in the configured `extensions` (default: `.md`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.pdf`), it is no larger than 10 MiB, and it is not inside an excluded directory. Run with `--debug` to inspect watcher and filter output.
+Check that its path matches an `items` pattern, its extension is listed in the configured `extensions` (default: `.md`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.svg`, `.pdf`), it is no larger than the configured `maxFileSizeMiB` (default: 10 MiB), and it is not inside an excluded directory. Run with `--debug` to inspect watcher and filter output.
 
 ### Remote changes appear late
 

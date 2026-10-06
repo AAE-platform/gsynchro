@@ -223,6 +223,7 @@ export class SyncService {
           sideRoot(this.ctx, side),
           this.ctx.config.items,
           extensions,
+          this.ctx.config.maxFileSizeMiB * 1024 * 1024,
         );
         const current = new Map(files.map((file) => [file.relativePath, file]));
         const previous = snapshotsFromStatus(status, side);

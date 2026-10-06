@@ -2,6 +2,12 @@
 
 Newest first. Entries are added by `npm run release` from CURRENT_CHANGE.md.
 
+## v0.3.1 — Configurable maximum file size
+
+_2026-10-06_
+
+Configurable maximum synchronized file size: add `maxFileSizeMiB` to the YAML configuration and ask for it in the interactive setup wizard. The default remains 10 MiB.
+
 ## v0.3.0 — Clearer console log: renames and no echo events
 
 _2026-10-04_

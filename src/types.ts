@@ -7,6 +7,8 @@ export interface Config {
   destination: string;
   /** Seconds of inactivity before reconciling. */
   debounce: number;
+  /** Maximum synchronized file size in MiB. */
+  maxFileSizeMiB: number;
   /** Glob patterns relative to the root of each side. */
   items: string[];
   /** Lower-case extensions including the leading dot. */

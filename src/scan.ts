@@ -3,7 +3,6 @@ import { lstat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { validateRoots } from './config.js';
-import { MAX_FILE_SIZE } from './constants.js';
 import { ensureMarkdownIdentity, hashFile, isMarkdownPath } from './identity.js';
 import { sideRoot } from './layout.js';
 import { isAllowedRelativePath, normalizeRelative } from './paths.js';
@@ -27,6 +26,7 @@ export async function collectCandidates(
   root: string,
   items: string[],
   extensions: ReadonlySet<string>,
+  maxFileSize: number,
 ): Promise<CollectResult> {
   /*
    * fast-glob does the configured path filtering.
@@ -79,7 +79,7 @@ export async function collectCandidates(
      * Files outside the safety scope are invisible to the sync engine.
      * They are therefore not interpreted as deletions.
      */
-    if (info.size > MAX_FILE_SIZE) {
+    if (info.size > maxFileSize) {
       oversized.push({ relativePath, size: info.size });
       continue;
     }
@@ -109,6 +109,7 @@ export async function scanSide(
     sideRoot(ctx, side),
     ctx.config.items,
     new Set(ctx.config.extensions),
+    ctx.config.maxFileSizeMiB * 1024 * 1024,
   );
 
   const result = new Map<string, FileSnapshot>();

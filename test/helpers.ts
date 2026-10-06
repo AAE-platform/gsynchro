@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { DEFAULT_EXTENSIONS } from '../src/constants.js';
+import { DEFAULT_EXTENSIONS, DEFAULT_MAX_FILE_SIZE_MIB } from '../src/constants.js';
 import { statusPath } from '../src/layout.js';
 import { createLogger } from '../src/output.js';
 import { pathExists } from '../src/paths.js';
@@ -89,6 +89,7 @@ export async function createFixture(
     config: {
       destination: driveRoot,
       debounce: 0,
+      maxFileSizeMiB: DEFAULT_MAX_FILE_SIZE_MIB,
       items: ['*.*', 'docs/**/*.*', 'tasks/**/*.*'],
       extensions: [...DEFAULT_EXTENSIONS],
       ...overrides,

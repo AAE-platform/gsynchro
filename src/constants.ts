@@ -1,4 +1,5 @@
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;
+export const DEFAULT_MAX_FILE_SIZE_MIB = 10;
 export const FALLBACK_SCAN_INTERVAL_MS = 60_000;
 export const DEFAULT_DEBOUNCE_SECONDS = 3;
 export const STATUS_HISTORY_LIMIT = 50;

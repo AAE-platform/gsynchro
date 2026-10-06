@@ -204,6 +204,19 @@ describe('filters and safety rules', () => {
     assert.equal((await fx.read('repo', 'big.txt')).length, MAX_FILE_SIZE + 1);
   });
 
+  test('uses the configured maximum file size', async () => {
+    fx.ctx.config.maxFileSizeMiB = 1;
+    await fx.write('repo', 'small.txt', Buffer.alloc(1 * 1024 * 1024));
+    await fx.write('repo', 'large.txt', Buffer.alloc(1 * 1024 * 1024 + 1));
+
+    const result = await fx.sync();
+
+    assert.notEqual(result.result, 'failed');
+    assert.ok(await fx.exists('drive', 'small.txt'));
+    assert.equal(await fx.exists('drive', 'large.txt'), false);
+    assert.match(fx.output.join('\n'), /> 1 MiB/);
+  });
+
   test('does not follow or copy symbolic links', async () => {
     await fx.write('repo', 'target.txt', 'real');
     await symlink(path.join(fx.root('repo'), 'target.txt'), path.join(fx.root('repo'), 'link.txt'));
