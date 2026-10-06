@@ -2,6 +2,12 @@
 
 Newest first. Entries are added by `npm run release` from CURRENT_CHANGE.md.
 
+## v0.3.2 — Readme changed
+
+_2026-10-06_
+
+We add gsynchro to AAE-Platform
+
 ## v0.3.1 — Configurable maximum file size
 
 _2026-10-06_

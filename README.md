@@ -1,4 +1,5 @@
-# gsynchro
+# AAE-Plaform :: **gsynchro**
+### **gsynchro** tool for **Agentic Autonomous Engineering Platform**
 
 **Bidirectional synchronization for a selected set of project files and a local directory.**
 
