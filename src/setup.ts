@@ -203,7 +203,7 @@ export async function runSetup(repoRoot: string): Promise<boolean> {
       '  Create a project-specific subfolder in that location before continuing.',
     );
     console.log(
-      '  Setup guide: https://github.com/FVilli/gsynchro#platform-setup-examples',
+      '  Setup guide: https://github.com/AAE-platform/gsynchro#platform-setup-examples',
     );
   }
 

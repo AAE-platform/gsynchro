@@ -2,6 +2,12 @@
 
 Newest first. Entries are added by `npm run release` from CURRENT_CHANGE.md.
 
+## v0.3.3 — Repository move and configurable file size
+
+_2026-10-06_
+
+Repository links now point to `AAE-platform/gsynchro` after the repository move. The npm package needs a new version publication for npm to receive the updated repository metadata. The configurable `maxFileSizeMiB` setting remains part of the current release work.
+
 ## v0.3.2 — Readme changed
 
 _2026-10-06_

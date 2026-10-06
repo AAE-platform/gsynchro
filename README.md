@@ -54,7 +54,7 @@ The ChatGPT Project + Google Drive pattern is one useful combination, not a requ
 - **AnythingLLM** for local-first workspaces, document knowledge, and controlled agents.
 - **Open WebUI + oikb** for a self-hosted knowledge base backed by local folders, Git, cloud storage, or other supported sources.
 
-See [alternative scenarios and their trade-offs](https://github.com/FVilli/gsynchro/blob/main/docs/scenarios.md) for current capabilities, limits, and how each option relates to `gsynchro`.
+See [alternative scenarios and their trade-offs](https://github.com/AAE-platform/gsynchro/blob/main/docs/scenarios.md) for current capabilities, limits, and how each option relates to `gsynchro`.
 
 ### Scenario A: a development computer at home
 
@@ -94,7 +94,7 @@ items:
   - "tasks/**/*.md"
 ```
 
-The task-file flow is the same: an approved Markdown task is written to `tasks/todo/` in Drive, rclone exposes it on the server, `gsynchro` copies it into the repository, and the server-side runner starts the coding agent. The server then writes task status and documentation updates locally, and `gsynchro` sends those selected files back to Drive. Keep the Drive mount, `gsynchro`, and the runner under a service manager so they recover after a reboot; the `gsynchro` and runner services need their own service definitions. See the [Linux rclone setup guide](https://github.com/FVilli/gsynchro/blob/main/docs/linux-rclone.md) for the rclone remote, mount, and systemd setup.
+The task-file flow is the same: an approved Markdown task is written to `tasks/todo/` in Drive, rclone exposes it on the server, `gsynchro` copies it into the repository, and the server-side runner starts the coding agent. The server then writes task status and documentation updates locally, and `gsynchro` sends those selected files back to Drive. Keep the Drive mount, `gsynchro`, and the runner under a service manager so they recover after a reboot; the `gsynchro` and runner services need their own service definitions. See the [Linux rclone setup guide](https://github.com/AAE-platform/gsynchro/blob/main/docs/linux-rclone.md) for the rclone remote, mount, and systemd setup.
 
 The chatbot remains the planning and control surface. To control a server-side runner directly, provide a separate remote interface or integration; a Drive source link alone does not execute commands on the server. A task file in the mounted Drive folder is a simple asynchronous handoff that the runner can observe.
 
@@ -396,7 +396,7 @@ cd ~/work/my-project
 npx gsynchro
 ```
 
-`--vfs-cache-mode writes` buffers writes locally and supports normal filesystem write operations; rclone retries failed uploads. The required FUSE support and permissions depend on the distribution and mount configuration. For the complete Ubuntu setup — rclone installation, Google OAuth configuration, verification, write test, and persistent user-level systemd service — see [the Linux rclone guide](https://github.com/FVilli/gsynchro/blob/main/docs/linux-rclone.md). Consult the [rclone mount documentation](https://rclone.org/commands/rclone_mount/) for mount options and troubleshooting.
+`--vfs-cache-mode writes` buffers writes locally and supports normal filesystem write operations; rclone retries failed uploads. The required FUSE support and permissions depend on the distribution and mount configuration. For the complete Ubuntu setup — rclone installation, Google OAuth configuration, verification, write test, and persistent user-level systemd service — see [the Linux rclone guide](https://github.com/AAE-platform/gsynchro/blob/main/docs/linux-rclone.md). Consult the [rclone mount documentation](https://rclone.org/commands/rclone_mount/) for mount options and troubleshooting.
 
 #### macOS: Google Drive for desktop
 
@@ -629,7 +629,7 @@ The project directory wins simultaneous changes. Check `.gsynchro/gsynchro.statu
 
 ## Development
 
-Source code and issues are on [GitHub](https://github.com/FVilli/gsynchro); see [CONTRIBUTING.md](https://github.com/FVilli/gsynchro/blob/main/CONTRIBUTING.md) for the contribution workflow. Before opening a pull request, fork the repository, create a focused branch, and keep the README and Linux guide current when a user-facing behavior changes.
+Source code and issues are on [GitHub](https://github.com/AAE-platform/gsynchro); see [CONTRIBUTING.md](https://github.com/AAE-platform/gsynchro/blob/main/CONTRIBUTING.md) for the contribution workflow. Before opening a pull request, fork the repository, create a focused branch, and keep the README and Linux guide current when a user-facing behavior changes.
 
 Clone the repository, then install dependencies and validate the change:
 
@@ -641,7 +641,7 @@ npm run build
 npm pack --dry-run
 ```
 
-The tests use Node's built-in test runner. Most of them synchronize two real temporary folders, which is all gsynchro does: see `test/helpers.ts`. Each run writes the complete console output of those synchronizations to `test-results/console.log` and the test report to `test-results/report.txt`. Set `GSYNCHRO_TEST_DEBUG=1` to include debug lines. The source is split into small modules described in [AGENTS.md](https://github.com/FVilli/gsynchro/blob/main/AGENTS.md), which also lists the safety invariants every change must preserve.
+The tests use Node's built-in test runner. Most of them synchronize two real temporary folders, which is all gsynchro does: see `test/helpers.ts`. Each run writes the complete console output of those synchronizations to `test-results/console.log` and the test report to `test-results/report.txt`. Set `GSYNCHRO_TEST_DEBUG=1` to include debug lines. The source is split into small modules described in [AGENTS.md](https://github.com/AAE-platform/gsynchro/blob/main/AGENTS.md), which also lists the safety invariants every change must preserve.
 
 The published package includes only the compiled CLI, this README, the change log, the license, and the diagram; inspect the exact tarball before every release:
 
