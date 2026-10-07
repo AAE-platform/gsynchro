@@ -2,6 +2,12 @@
 
 Newest first. Entries are added by `npm run release` from CURRENT_CHANGE.md.
 
+## v0.3.5 — Transient synchronization progress
+
+_2026-10-07_
+
+Show the current synchronization phase and file path on a transient terminal line, updating it in place without leaving a list of scanned files after synchronization completes. Progress is only shown in interactive terminals and does not add redirected log lines.
+
 ## v0.3.4 — Transient synchronization progress
 
 _2026-10-07_

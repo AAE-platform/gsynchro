@@ -9,6 +9,17 @@ export const STYLED_OUTPUT =
   !process.env.NO_COLOR &&
   !process.argv.slice(2).includes('--no-color');
 
+const TRANSIENT_OUTPUT = Boolean(process.stdout.isTTY);
+
+function fitProgressLine(message: string): string {
+  const columns = process.stdout.columns;
+  if (!columns || message.length < columns) {
+    return message;
+  }
+
+  return `${[...message].slice(0, Math.max(1, columns - 2)).join('')}…`;
+}
+
 /* Colors are on only for styled output, whatever picocolors detects. */
 const colors = pc.createColors(STYLED_OUTPUT);
 
@@ -105,7 +116,7 @@ export function createLogger(sink: LogSink, debugEnabled: boolean): Logger {
       return;
     }
 
-    sink.write?.('\r\x1b[2K');
+    sink.write?.('\r\x1b[2K\r');
     progressVisible = false;
   };
 
@@ -133,7 +144,7 @@ export function createLogger(sink: LogSink, debugEnabled: boolean): Logger {
         return;
       }
 
-      sink.write(`\r\x1b[2K${message}`);
+      sink.write(`\r\x1b[2K${fitProgressLine(message)}`);
       progressVisible = true;
     },
   };
@@ -144,7 +155,7 @@ export function createConsoleLogger(debugEnabled: boolean): Logger {
     {
       out: (line) => console.log(line),
       err: (line) => console.error(line),
-      write: STYLED_OUTPUT ? (text) => process.stdout.write(text) : undefined,
+      write: TRANSIENT_OUTPUT ? (text) => process.stdout.write(text) : undefined,
     },
     debugEnabled,
   );

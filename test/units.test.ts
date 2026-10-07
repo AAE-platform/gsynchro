@@ -194,7 +194,7 @@ describe('console output', () => {
       'write:\r\x1b[2K   scanning [repo] notes.txt',
       'write:\r\x1b[2K   scanning [repo] tasks/todo.md',
     ]);
-    assert.match(output[2]!, /^write:\r\x1b\[2K$/);
+    assert.match(output[2]!, /^write:\r\x1b\[2K\r$/);
     assert.match(output[3]!, /^out:\d{2}:\d{2}:\d{2}\.\d{3} done$/);
   });
 });
