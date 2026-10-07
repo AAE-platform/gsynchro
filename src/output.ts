@@ -75,6 +75,8 @@ export function formatSize(bytes: number): string {
 export interface LogSink {
   out(line: string): void;
   err(line: string): void;
+  /** Write transient output without appending a newline. */
+  write?(text: string): void;
 }
 
 /** Local wall-clock time as HH:MM:ss.fff. */
@@ -96,14 +98,43 @@ export function withTimestamp(message: string, date = new Date()): string {
 
 /** A logger producing the CLI's console lines, written to any sink. */
 export function createLogger(sink: LogSink, debugEnabled: boolean): Logger {
+  let progressVisible = false;
+
+  const clearProgress = () => {
+    if (!progressVisible) {
+      return;
+    }
+
+    sink.write?.('\r\x1b[2K');
+    progressVisible = false;
+  };
+
   return {
-    info: (message) => sink.out(withTimestamp(message)),
-    warn: (message) => sink.err(withTimestamp(message)),
-    error: (message) => sink.err(withTimestamp(message)),
+    info: (message) => {
+      clearProgress();
+      sink.out(withTimestamp(message));
+    },
+    warn: (message) => {
+      clearProgress();
+      sink.err(withTimestamp(message));
+    },
+    error: (message) => {
+      clearProgress();
+      sink.err(withTimestamp(message));
+    },
     debug: (message, details) => {
       if (debugEnabled) {
+        clearProgress();
         sink.out(withTimestamp(format(`${paint('[debug]', 'dim')} ${message}`, details ?? '')));
       }
+    },
+    progress: (message) => {
+      if (!sink.write) {
+        return;
+      }
+
+      sink.write(`\r\x1b[2K${message}`);
+      progressVisible = true;
     },
   };
 }
@@ -113,6 +144,7 @@ export function createConsoleLogger(debugEnabled: boolean): Logger {
     {
       out: (line) => console.log(line),
       err: (line) => console.error(line),
+      write: STYLED_OUTPUT ? (text) => process.stdout.write(text) : undefined,
     },
     debugEnabled,
   );
@@ -123,4 +155,5 @@ export const silentLogger: Logger = {
   warn: () => {},
   error: () => {},
   debug: () => {},
+  progress: () => {},
 };

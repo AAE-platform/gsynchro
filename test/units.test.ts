@@ -177,4 +177,24 @@ describe('console output', () => {
     createLogger({ out: (l) => out.push(l), err: () => {} }, false).debug('x');
     assert.deepEqual(out, []);
   });
+
+  test('progress updates the same terminal line and is cleared before logging', () => {
+    const output: string[] = [];
+    const log = createLogger({
+      out: (line) => output.push(`out:${line}`),
+      err: () => {},
+      write: (text) => output.push(`write:${text}`),
+    }, false);
+
+    log.progress('   scanning [repo] notes.txt');
+    log.progress('   scanning [repo] tasks/todo.md');
+    log.info('done');
+
+    assert.deepEqual(output.slice(0, 2), [
+      'write:\r\x1b[2K   scanning [repo] notes.txt',
+      'write:\r\x1b[2K   scanning [repo] tasks/todo.md',
+    ]);
+    assert.match(output[2]!, /^write:\r\x1b\[2K$/);
+    assert.match(output[3]!, /^out:\d{2}:\d{2}:\d{2}\.\d{3} done$/);
+  });
 });

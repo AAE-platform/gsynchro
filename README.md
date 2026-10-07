@@ -455,6 +455,8 @@ Other options: `--setup` reopens the configuration wizard, `--version` prints th
 
 Every log line starts with the local time (`HH:MM:ss.fff`). When run in an interactive terminal, `gsynchro` uses color and compact status icons to make synchronization activity easier to scan. Set the standard `NO_COLOR` environment variable, or pass `--no-color`, for plain output; output is also plain when redirected to a file or another process.
 
+While a synchronization is working, the line below `♻️ syncing ...` is updated in place with the current phase and, during scanning or file operations, the side and relative path being processed. It is transient terminal progress: it does not add log lines, and it is omitted when output is redirected.
+
 ### Reading the console log
 
 The console log is part of what gsynchro offers, not just a debugging aid. Synchronizing two folders through a cloud mount involves several independent actors: you, an editor, the Drive client or rclone, the filesystem watcher, and gsynchro itself. When something looks wrong, the log should show what each step saw and when it saw it. For this reason the log deliberately shows two layers and keeps every timestamp to the millisecond.

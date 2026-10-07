@@ -116,6 +116,12 @@ export async function executePlan(
   operations: SyncOperation[],
 ): Promise<void> {
   for (const operation of operations) {
+    const description = operation.type === 'move'
+      ? `${operation.path} (from ${operation.previousPath})`
+      : operation.path;
+    const side = operation.type === 'delete' ? operation.side : operation.from;
+    ctx.log.progress(`   ${operation.type} [${side}] ${description}`);
+
     switch (operation.type) {
       case 'copy':
         await copyBetweenSides(ctx, operation.from, operation.to, operation.path);

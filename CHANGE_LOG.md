@@ -2,6 +2,12 @@
 
 Newest first. Entries are added by `npm run release` from CURRENT_CHANGE.md.
 
+## v0.3.4 — Transient synchronization progress
+
+_2026-10-07_
+
+Show transient terminal progress while scanning and applying a synchronization, including the current side and file path. The progress line is updated in place and is omitted from redirected output.
+
 ## v0.3.3 — Repository move and configurable file size
 
 _2026-10-06_

@@ -124,6 +124,8 @@ export async function scanSide(
   };
 
   for (const file of files) {
+    ctx.log.progress(`   scanning [${side}] ${file.relativePath}`);
+
     /* Skip re-hashing when size and mtime match the last saved snapshot. */
     const known = knownSnapshots.get(file.relativePath);
     const canReuseKnownSnapshot = known &&

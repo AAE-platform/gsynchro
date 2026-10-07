@@ -130,6 +130,7 @@ export async function synchronize(
   try {
     const previousStatus = await loadStatusFile(statusPath(ctx.repoRoot));
 
+    log.progress('   validating roots and configuration');
     await validateRoots(ctx.repoRoot, ctx.driveRoot);
     await assertDestinationInitialized(ctx.driveRoot, previousStatus);
 
@@ -165,6 +166,7 @@ export async function synchronize(
       return { result: 'up-to-date', operations: [] };
     }
 
+    log.progress(`   applying ${plan.length} planned operation${plan.length === 1 ? '' : 's'}`);
     await executePlan(ctx, plan);
 
     /*
@@ -172,6 +174,7 @@ export async function synchronize(
      *
      * Do not trust the intended result: observe the filesystems again.
      */
+    log.progress('   verifying synchronized files');
     const after = await scanCurrentState(ctx, previousStatus);
 
     if (buildSyncPlan(buildStatusFromState(after), after).length !== 0) {

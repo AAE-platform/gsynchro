@@ -114,6 +114,8 @@ export interface Logger {
   warn(message: string): void;
   error(message: string): void;
   debug(message: string, details?: unknown): void;
+  /** Update transient terminal progress without adding a log line. */
+  progress(message: string): void;
 }
 
 /** Everything a synchronization run needs; no module-level state. */
